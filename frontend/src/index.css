@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---- Theme palettes (RGB channels, consumed by tailwind.config.js) ---- */
+
+/* Dark is the default. */
+:root {
+  --ink-950: 11 14 20;
+  --ink-900: 17 21 31;
+  --ink-800: 26 32 48;
+  --ink-700: 37 44 64;
+  --ink-500: 74 85 114;
+  --ink-300: 154 165 193;
+  --ink-100: 227 232 244;
+
+  --ember-500: 255 138 61;
+  --ember-600: 240 116 31;
+  --mint-400: 94 230 168;
+  --sky-400: 91 200 255;
+
+  /* Chart helpers read by MarketDashboard via getThemeColors(). */
+  --chart-grid: 37 44 64;
+  --chart-axis: 74 85 114;
+  color-scheme: dark;
+}
+
+/* Light theme: the ink scale flips so 950 is the lightest surface and
+   100 is the darkest text. Accents are deepened for contrast on white. */
+.light {
+  --ink-950: 247 248 251; /* app background */
+  --ink-900: 255 255 255; /* panels */
+  --ink-800: 237 240 246; /* raised surfaces */
+  --ink-700: 220 226 235; /* borders / hovers */
+  --ink-500: 112 122 145;
+  --ink-300: 71 80 102;
+  --ink-100: 20 24 33;     /* primary text */
+
+  --ember-500: 210 88 12;
+  --ember-600: 181 74 8;
+  --mint-400: 14 157 99;
+  --sky-400: 14 124 204;
+
+  --chart-grid: 220 226 235;
+  --chart-axis: 112 122 145;
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-ink-950 text-ink-100 font-sans antialiased;
+}
+
+/* Slim scrollbars that match the panel chrome */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-ink-700 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-ink-500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
