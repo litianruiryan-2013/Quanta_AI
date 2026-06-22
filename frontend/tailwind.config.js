@@ -34,6 +34,35 @@ export default {
         sans: ["Inter", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "Menlo", "Consolas", "monospace"],
       },
+      keyframes: {
+        fadeUp: {
+          from: { opacity: "0", transform: "translateY(20px)" },
+          to:   { opacity: "1", transform: "translateY(0)" },
+        },
+        wordmarkReveal: {
+          from: { opacity: "0", transform: "translateY(52px) scale(0.88)", filter: "blur(10px)" },
+          to:   { opacity: "1", transform: "translateY(0)    scale(1)",    filter: "blur(0px)"  },
+        },
+        glowDrift: {
+          "0%, 100%": { transform: "translateX(-8rem) scale(1)",    opacity: "0.55" },
+          "50%":      { transform: "translateX(4rem)  scale(1.45)", opacity: "0.9"  },
+        },
+        glowDrift2: {
+          "0%, 100%": { transform: "translateX(8rem)  scale(1)",    opacity: "0.45" },
+          "50%":      { transform: "translateX(-3rem) scale(1.35)", opacity: "0.8"  },
+        },
+      },
+      animation: {
+        "fade-up":         "fadeUp 0.65s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "wordmark-reveal": "wordmarkReveal 0.9s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "glow-drift":      "glowDrift  6s ease-in-out infinite",
+        "glow-drift2":     "glowDrift2 7s ease-in-out infinite",
+      },
+      boxShadow: {
+        "ember-glow": "0 8px 32px 0 rgba(255, 138, 61, 0.22)",
+        "sky-glow":   "0 8px 32px 0 rgba(91, 200, 255, 0.2)",
+        "mint-glow":  "0 8px 32px 0 rgba(94, 230, 168, 0.2)",
+      },
     },
   },
   plugins: [],
