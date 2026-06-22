@@ -1,3 +1,5 @@
+import QuantaLoader from "./QuantaLoader.jsx";
+
 /**
  * Full-width overlay panel that previews a CSV/TSV/Excel file (parsed by
  * pandas on the backend) and offers one-click "Analyze with AI".
@@ -38,8 +40,8 @@ export default function DataPreview({ data, loading, error, onClose, onAnalyze }
       </div>
 
       {loading && (
-        <div className="flex flex-1 items-center justify-center text-sm text-ink-500">
-          Parsing spreadsheet with pandas…
+        <div className="flex flex-1 items-center justify-center">
+          <QuantaLoader label="Parsing spreadsheet…" />
         </div>
       )}
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { BarChart3, Brain, Network, TrendingUp } from "lucide-react";
 import Message from "./Message.jsx";
+import QuantaLoader from "./QuantaLoader.jsx";
 import { streamChat } from "../api.js";
 
 const MODE_CONFIG = {
@@ -223,20 +224,30 @@ export default function Chat({
           </div>
         )}
 
-        {messages.map((m, i) => (
-          <motion.div
-            key={i}
-            initial={shouldReduce ? false : { opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={msgTransition}
-          >
-            <Message
-              role={m.role}
-              content={m.content}
-              streaming={busy && i === messages.length - 1 && m.role === "assistant"}
-            />
-          </motion.div>
-        ))}
+        {messages.map((m, i) => {
+          const isWaiting =
+            busy && i === messages.length - 1 && m.role === "assistant" && !m.content;
+          return (
+            <motion.div
+              key={i}
+              initial={shouldReduce ? false : { opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={msgTransition}
+            >
+              {isWaiting ? (
+                <div className="flex justify-start pl-1 pt-1">
+                  <QuantaLoader size="sm" label="Thinking…" />
+                </div>
+              ) : (
+                <Message
+                  role={m.role}
+                  content={m.content}
+                  streaming={busy && i === messages.length - 1 && m.role === "assistant"}
+                />
+              )}
+            </motion.div>
+          );
+        })}
 
         {error && (
           <motion.div

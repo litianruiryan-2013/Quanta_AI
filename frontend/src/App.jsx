@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import Home from "./Home.jsx";
 import DataPanel from "./components/FileTree.jsx";
 import Chat from "./components/Chat.jsx";
@@ -9,26 +10,49 @@ import Simulator from "./components/Simulator.jsx";
 import useMediaQuery from "./useMediaQuery.js";
 import { getHealth, analyzeSpreadsheet } from "./api.js";
 
-export default function App() {
-  // Ollama
+// URL slug ↔ internal module name
+const SLUG_TO_MODULE = {
+  "strategy":             "strategy",
+  "supply-chain":         "supply_chain",
+  "fx-treasury":          "fx_treasury",
+  "commodity-arbitrage":  "commodity_arbitrage",
+  "trading":              "simulator",
+};
+
+const MODULE_TO_SLUG = {
+  "strategy":             "strategy",
+  "supply_chain":         "supply-chain",
+  "fx_treasury":          "fx-treasury",
+  "commodity_arbitrage":  "commodity-arbitrage",
+  "simulator":            "trading",
+};
+
+function AppShell() {
+  const navigate   = useNavigate();
+  const { pathname } = useLocation();
+
+  // Derive current module from URL, e.g. /app/supply-chain → "supply_chain"
+  const slug          = pathname.split("/app/")[1]?.split("/")[0] ?? "strategy";
+  const currentModule = SLUG_TO_MODULE[slug] ?? "strategy";
+  const trading       = currentModule === "simulator";
+  const mode          = trading ? "strategy" : currentModule;
+
+  // Ollama / provider
   const [ollamaOk, setOllamaOk] = useState(false);
-  const [models, setModels] = useState([]);
-  const [model, setModel] = useState("llama3");
+  const [models, setModels]     = useState([]);
+  const [model, setModel]       = useState("llama3");
   const [provider, setProvider] = useState("ollama");
 
-  // Chat (messages lifted here so they survive workspace/tab switches)
-  const [messages, setMessages] = useState([]);
-  const [mode, setMode] = useState("strategy");
-  const [dataContext, setDataContext] = useState(null);
+  // Chat (lifted so messages survive module switches)
+  const [messages, setMessages]         = useState([]);
+  const [dataContext, setDataContext]   = useState(null);
   const [pendingPrompt, setPendingPrompt] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview]           = useState(null);
 
   // Layout
-  const [showHome, setShowHome] = useState(true);
-  const isMobile = useMediaQuery("(max-width: 767px)");
-  const [workspace, setWorkspace] = useState("assistant"); // desktop: assistant | trading
+  const isMobile    = useMediaQuery("(max-width: 767px)");
   const [showMarket, setShowMarket] = useState(false);
-  const [mobileTab, setMobileTab] = useState("chat");       // files|market|trade|chat
+  const [mobileTab, setMobileTab]   = useState("chat");
 
   // Theme
   const [theme, setTheme] = useState(() => {
@@ -43,15 +67,10 @@ export default function App() {
   }, [theme]);
   const toggleTheme = useCallback(() => setTheme((t) => (t === "dark" ? "light" : "dark")), []);
 
-  // Unified module selector: one of the 4 analysis modes OR "simulator".
   const setModule = useCallback((m) => {
-    if (m === "simulator") {
-      setWorkspace("trading");
-    } else {
-      setWorkspace("assistant");
-      setMode(m);
-    }
-  }, []);
+    navigate(`/app/${MODULE_TO_SLUG[m] ?? "strategy"}`);
+    if (isMobile) setMobileTab("chat");
+  }, [navigate, isMobile]);
 
   const shouldReduce = useReducedMotion();
 
@@ -80,10 +99,7 @@ export default function App() {
     };
     check();
     const id = setInterval(check, 10000);
-    return () => {
-      active = false;
-      clearInterval(id);
-    };
+    return () => { active = false; clearInterval(id); };
   }, []);
 
   const openData = useCallback(async (node) => {
@@ -96,15 +112,14 @@ export default function App() {
     }
   }, []);
 
-  // Route any evidence (dataset, market, portfolio) into the Strategy chat.
   const sendEvidenceToAI = useCallback(
     (ctx, prompt) => {
       setDataContext(ctx);
       if (prompt) setPendingPrompt(prompt);
-      setWorkspace("assistant");
+      navigate("/app/strategy");
       if (isMobile) setMobileTab("chat");
     },
-    [isMobile]
+    [navigate, isMobile]
   );
 
   const analyzeWithAI = useCallback(
@@ -120,12 +135,6 @@ export default function App() {
     [sendEvidenceToAI]
   );
 
-  if (showHome) {
-    return <Home onLaunch={() => setShowHome(false)} theme={theme} onToggleTheme={toggleTheme} />;
-  }
-
-  const trading       = workspace === "trading";
-  const currentModule = trading ? "simulator" : mode;
   const providerLabel = provider === "groq" ? "Groq" : provider === "gemini" ? "Gemini" : "Ollama";
 
   // ---- Shared panels ----
@@ -137,7 +146,7 @@ export default function App() {
     <Chat
       model={model} models={models} onModelChange={setModel}
       ollamaOk={ollamaOk} provider={provider}
-      mode={mode} onModeChange={setMode}
+      mode={mode} onModeChange={(m) => navigate(`/app/${MODULE_TO_SLUG[m] ?? "strategy"}`)}
       dataContext={dataContext} onClearDataContext={() => setDataContext(null)}
       pendingPrompt={pendingPrompt} onPendingConsumed={() => setPendingPrompt(null)}
       messages={messages} setMessages={setMessages}
@@ -207,7 +216,6 @@ export default function App() {
     <div className="flex h-full flex-col">
       {/* ── Top bar ── */}
       <header className="flex h-12 shrink-0 items-center gap-4 border-b border-ink-700 bg-ink-900 px-5">
-        {/* Brand */}
         <div className="flex shrink-0 items-center gap-2.5">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ember-600 font-mono text-sm font-bold text-ink-950">
             Q
@@ -217,7 +225,6 @@ export default function App() {
 
         <div className="h-5 w-px shrink-0 bg-ink-700" />
 
-        {/* Module dropdown — the primary nav */}
         <select
           value={currentModule}
           onChange={(e) => setModule(e.target.value)}
@@ -232,7 +239,6 @@ export default function App() {
 
         <div className="flex-1" />
 
-        {/* Chart toggle — hidden in simulator */}
         {!trading && (
           <button
             onClick={() => setShowMarket((s) => !s)}
@@ -246,18 +252,15 @@ export default function App() {
           </button>
         )}
 
-        {/* AI provider status */}
         <span className={`flex items-center gap-1.5 font-mono text-[11px] ${ollamaOk ? "text-mint-400" : "text-red-400"}`}>
           <span className={`inline-block h-1.5 w-1.5 rounded-full ${ollamaOk ? "bg-mint-400" : "bg-red-400"}`} />
           {providerLabel}
         </span>
 
-        {/* Offline badge */}
         <span className="rounded-full border border-ink-700 px-2 py-0.5 font-mono text-[10px] text-ink-500">
           offline · free
         </span>
 
-        {/* Theme toggle */}
         <button
           onClick={toggleTheme}
           aria-label="Toggle color theme"
@@ -269,7 +272,6 @@ export default function App() {
 
       {/* ── Body ── */}
       <main className="flex min-h-0 flex-1">
-        {/* Left: data panel — slides away when simulator is active */}
         <motion.aside
           animate={{ width: trading ? 0 : 288, opacity: trading ? 0 : 1 }}
           transition={shouldReduce ? { duration: 0 } : { duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
@@ -283,9 +285,7 @@ export default function App() {
           <div className="min-h-0 flex-1">{dataPanel}</div>
         </motion.aside>
 
-        {/* Center: analysis workspace OR simulator */}
         <section className="relative flex min-w-0 flex-1 flex-col bg-ink-950">
-          {/* Analysis workspace (all 4 modes) */}
           <div className={`flex min-h-0 flex-1 flex-col ${trading ? "hidden" : ""}`}>
             <AnimatePresence>
               {showMarket && (
@@ -304,7 +304,6 @@ export default function App() {
             <div className="min-h-0 flex-1">{chatPanel}</div>
           </div>
 
-          {/* Paper-trading simulator */}
           <div className={`min-h-0 flex-1 ${trading ? "" : "hidden"}`}>
             {simulatorPanel}
           </div>
@@ -313,5 +312,41 @@ export default function App() {
         </section>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  // Theme is also needed on the Home route, so read it here for the Home prop.
+  // AppShell manages its own copy with localStorage sync.
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === "undefined") return "dark";
+    const saved = localStorage.getItem("quanta-theme");
+    if (saved === "dark" || saved === "light") return saved;
+    return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle("light", theme === "light");
+    localStorage.setItem("quanta-theme", theme);
+  }, [theme]);
+  const toggleTheme = useCallback(() => setTheme((t) => (t === "dark" ? "light" : "dark")), []);
+
+  const navigate = useNavigate();
+
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <Home
+            onLaunch={() => navigate("/app/strategy")}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
+        }
+      />
+      <Route path="/app" element={<Navigate to="/app/strategy" replace />} />
+      <Route path="/app/:module" element={<AppShell />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

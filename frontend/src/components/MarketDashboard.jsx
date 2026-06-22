@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { fetchMarketData } from "../api.js";
+import QuantaLoader from "./QuantaLoader.jsx";
 
 const PERIODS = ["1mo", "3mo", "6mo", "1y", "5y"];
 const PRESETS = ["AAPL", "MSFT", "NVDA", "^GSPC", "EURUSD=X", "USDSGD=X", "BTC-USD"];
@@ -233,6 +234,12 @@ export default function MarketDashboard({ onSendToAI, theme }) {
       </div>
 
       {error && <p className="px-4 pt-2 text-xs text-red-400">{error}</p>}
+
+      {loading && !dataA && (
+        <div className="flex h-44 items-center justify-center">
+          <QuantaLoader label="Fetching market data…" />
+        </div>
+      )}
 
       {/* Stats + chart */}
       {dataA && (

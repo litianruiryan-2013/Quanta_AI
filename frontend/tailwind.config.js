@@ -51,12 +51,17 @@ export default {
           "0%, 100%": { transform: "translateX(8rem)  scale(1)",    opacity: "0.45" },
           "50%":      { transform: "translateX(-3rem) scale(1.35)", opacity: "0.8"  },
         },
+        glowPulse: {
+          "0%, 100%": { opacity: "0.45" },
+          "50%":      { opacity: "0.85" },
+        },
       },
       animation: {
         "fade-up":         "fadeUp 0.65s cubic-bezier(0.16, 1, 0.3, 1) both",
         "wordmark-reveal": "wordmarkReveal 0.9s cubic-bezier(0.16, 1, 0.3, 1) both",
         "glow-drift":      "glowDrift  6s ease-in-out infinite",
         "glow-drift2":     "glowDrift2 7s ease-in-out infinite",
+        "glow-pulse":      "glowPulse  2.4s ease-in-out infinite",
       },
       boxShadow: {
         "ember-glow": "0 8px 32px 0 rgba(255, 138, 61, 0.22)",
