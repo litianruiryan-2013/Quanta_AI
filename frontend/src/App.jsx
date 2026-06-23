@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import Home from "./Home.jsx";
@@ -161,10 +161,44 @@ function AppShell() {
     mode === "fx_treasury"         ? "FX Rates" :
     mode === "commodity_arbitrage" ? "Spreads"  : "Chart";
 
-  // Editable-table panels need more vertical space than the market chart.
+  // Default open height per mode. Strategy needs ~440 to show the full
+  // MarketDashboard (controls + stats + chart h-56 + footer).
   const chartPanelHeight =
     mode === "supply_chain" || mode === "commodity_arbitrage" ? 520 :
-    mode === "fx_treasury"                                    ? 400 : 320;
+    mode === "fx_treasury"                                    ? 400 : 440;
+
+  // User-dragged height override — resets to mode default on module switch.
+  const [userChartHeight, setUserChartHeight] = useState(null);
+  useEffect(() => { setUserChartHeight(null); }, [mode]);
+  const effectiveChartHeight = userChartHeight ?? chartPanelHeight;
+
+  // Ref on the chart panel so we can set its height directly during drag
+  // without triggering React re-renders on every mousemove.
+  const chartPanelRef = useRef(null);
+
+  const onResizeStart = useCallback((e) => {
+    e.preventDefault();
+    const startY    = e.touches ? e.touches[0].clientY : e.clientY;
+    const startH    = chartPanelRef.current?.offsetHeight ?? effectiveChartHeight;
+
+    const onMove = (ev) => {
+      const y    = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      const newH = Math.max(160, Math.min(startH + (y - startY), 720));
+      if (chartPanelRef.current) chartPanelRef.current.style.height = `${newH}px`;
+    };
+    const onUp = () => {
+      const finalH = chartPanelRef.current?.offsetHeight ?? effectiveChartHeight;
+      setUserChartHeight(finalH);
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup",   onUp);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend",  onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup",   onUp);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend",  onUp);
+  }, [effectiveChartHeight]);
   const chatPanel = (
     <Chat
       model={model} models={models} onModelChange={setModel}
@@ -313,17 +347,31 @@ function AppShell() {
             <AnimatePresence>
               {showMarket && (
                 <motion.div
+                  ref={chartPanelRef}
                   key="market"
                   initial={shouldReduce ? false : { height: 0, opacity: 0 }}
-                  animate={{ height: chartPanelHeight, opacity: 1 }}
+                  animate={{ height: effectiveChartHeight, opacity: 1 }}
                   exit={shouldReduce ? {} : { height: 0, opacity: 0 }}
                   transition={shouldReduce ? { duration: 0 } : { duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                  className="shrink-0 overflow-hidden border-b border-ink-700"
+                  className="shrink-0 overflow-y-auto border-b border-ink-700"
                 >
                   {activeChartPanel}
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Drag handle — only rendered while chart panel is open */}
+            {showMarket && (
+              <div
+                onMouseDown={onResizeStart}
+                onTouchStart={onResizeStart}
+                title="Drag to resize"
+                className="group flex h-3 shrink-0 cursor-row-resize items-center justify-center bg-ink-950"
+              >
+                <div className="h-0.5 w-10 rounded-full bg-ink-700 transition-colors group-hover:bg-ember-500/60" />
+              </div>
+            )}
+
             <div className="min-h-0 flex-1">{chatPanel}</div>
           </div>
 
