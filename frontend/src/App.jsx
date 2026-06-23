@@ -5,6 +5,9 @@ import Home from "./Home.jsx";
 import DataPanel from "./components/FileTree.jsx";
 import Chat from "./components/Chat.jsx";
 import MarketDashboard from "./components/MarketDashboard.jsx";
+import SupplyChainChart from "./components/SupplyChainChart.jsx";
+import FXTreasuryChart from "./components/FXTreasuryChart.jsx";
+import CommodityArbitrageChart from "./components/CommodityArbitrageChart.jsx";
 import DataPreview from "./components/DataPreview.jsx";
 import Simulator from "./components/Simulator.jsx";
 import useMediaQuery from "./useMediaQuery.js";
@@ -116,10 +119,12 @@ function AppShell() {
     (ctx, prompt) => {
       setDataContext(ctx);
       if (prompt) setPendingPrompt(prompt);
-      navigate("/app/strategy");
+      // Stay on the current analysis module so context reaches the right chat.
+      // Simulator always routes to strategy since it has no own chat.
+      navigate(`/app/${MODULE_TO_SLUG[trading ? "strategy" : mode] ?? "strategy"}`);
       if (isMobile) setMobileTab("chat");
     },
-    [navigate, isMobile]
+    [navigate, isMobile, mode, trading]
   );
 
   const analyzeWithAI = useCallback(
@@ -142,6 +147,18 @@ function AppShell() {
   const dataPanel = <DataPanel onOpenData={openData} activeFile={activeFile} />;
   const marketPanel = <MarketDashboard onSendToAI={sendEvidenceToAI} theme={theme} />;
   const simulatorPanel = <Simulator onSendToAI={sendEvidenceToAI} theme={theme} />;
+
+  // Per-module chart panels — each mode gets the visualization that fits its data
+  const activeChartPanel =
+    mode === "supply_chain"        ? <SupplyChainChart        onSendToAI={sendEvidenceToAI} theme={theme} /> :
+    mode === "fx_treasury"         ? <FXTreasuryChart         onSendToAI={sendEvidenceToAI} theme={theme} /> :
+    mode === "commodity_arbitrage" ? <CommodityArbitrageChart onSendToAI={sendEvidenceToAI} theme={theme} /> :
+                                     marketPanel;
+
+  const chartBtnLabel =
+    mode === "supply_chain"        ? "Vendors"  :
+    mode === "fx_treasury"         ? "FX Rates" :
+    mode === "commodity_arbitrage" ? "Spreads"  : "Chart";
   const chatPanel = (
     <Chat
       model={model} models={models} onModelChange={setModel}
@@ -191,7 +208,7 @@ function AppShell() {
 
         <main className="relative min-h-0 flex-1">
           <div className={`h-full ${mobileTab === "files"  ? "" : "hidden"}`}>{dataPanel}</div>
-          <div className={`h-full overflow-y-auto ${mobileTab === "market" ? "" : "hidden"}`}>{marketPanel}</div>
+          <div className={`h-full overflow-y-auto ${mobileTab === "market" ? "" : "hidden"}`}>{activeChartPanel}</div>
           <div className={`h-full ${mobileTab === "trade"  ? "" : "hidden"}`}>{simulatorPanel}</div>
           <div className={`h-full ${mobileTab === "chat"   ? "" : "hidden"}`}>{chatPanel}</div>
           {dataPreviewOverlay}
@@ -248,7 +265,7 @@ function AppShell() {
                 : "border-ink-700 text-ink-500 hover:border-ink-500 hover:text-ink-100"
             }`}
           >
-            <span className="text-[10px]">▲</span> Chart
+            <span className="text-[10px]">▲</span> {chartBtnLabel}
           </button>
         )}
 
@@ -297,7 +314,7 @@ function AppShell() {
                   transition={shouldReduce ? { duration: 0 } : { duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                   className="shrink-0 overflow-hidden border-b border-ink-700"
                 >
-                  {marketPanel}
+                  {activeChartPanel}
                 </motion.div>
               )}
             </AnimatePresence>
