@@ -138,7 +138,7 @@ export default function SupplyChainChart({ onSendToAI, theme }) {
       </div>
 
       {/* Editable table */}
-      <div className="overflow-x-auto px-4 pb-1">
+      <div className="overflow-x-auto px-4 pb-1" style={{ maxHeight: 160, overflowY: "auto" }}>
         <table className="w-full font-mono text-[11px]">
           <thead>
             <tr className="text-left text-ink-500">

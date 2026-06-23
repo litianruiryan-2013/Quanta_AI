@@ -122,6 +122,7 @@ function AppShell() {
       // Stay on the current analysis module so context reaches the right chat.
       // Simulator always routes to strategy since it has no own chat.
       navigate(`/app/${MODULE_TO_SLUG[trading ? "strategy" : mode] ?? "strategy"}`);
+      setShowMarket(false); // close the chart panel so the chat is visible
       if (isMobile) setMobileTab("chat");
     },
     [navigate, isMobile, mode, trading]
@@ -159,6 +160,11 @@ function AppShell() {
     mode === "supply_chain"        ? "Vendors"  :
     mode === "fx_treasury"         ? "FX Rates" :
     mode === "commodity_arbitrage" ? "Spreads"  : "Chart";
+
+  // Editable-table panels need more vertical space than the market chart.
+  const chartPanelHeight =
+    mode === "supply_chain" || mode === "commodity_arbitrage" ? 520 :
+    mode === "fx_treasury"                                    ? 400 : 320;
   const chatPanel = (
     <Chat
       model={model} models={models} onModelChange={setModel}
@@ -309,7 +315,7 @@ function AppShell() {
                 <motion.div
                   key="market"
                   initial={shouldReduce ? false : { height: 0, opacity: 0 }}
-                  animate={{ height: 320, opacity: 1 }}
+                  animate={{ height: chartPanelHeight, opacity: 1 }}
                   exit={shouldReduce ? {} : { height: 0, opacity: 0 }}
                   transition={shouldReduce ? { duration: 0 } : { duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                   className="shrink-0 overflow-hidden border-b border-ink-700"
