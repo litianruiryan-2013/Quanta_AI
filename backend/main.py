@@ -20,6 +20,9 @@ import os
 import secrets
 from typing import Dict, List, Optional
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import httpx
 import pandas as pd
 import yfinance as yf
