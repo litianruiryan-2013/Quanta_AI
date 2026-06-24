@@ -17,6 +17,7 @@ import io
 import json
 import math
 import os
+import secrets
 from typing import Dict, List, Optional
 
 import httpx
@@ -31,6 +32,9 @@ from pydantic import BaseModel, Field
 # --------------------------------------------------------------------------
 # Configuration
 # --------------------------------------------------------------------------
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
 
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "llama3")
@@ -83,6 +87,14 @@ app.add_middleware(
 
 # Optional per-IP rate limiting (so one visitor can't drain your cloud quota).
 # Gracefully no-ops if slowapi isn't installed, so local dev never breaks.
+try:
+    from supabase import create_client, Client as SupabaseClient
+    _supabase: "SupabaseClient | None" = (
+        create_client(SUPABASE_URL, SUPABASE_KEY) if (SUPABASE_URL and SUPABASE_KEY) else None
+    )
+except ImportError:
+    _supabase = None
+
 try:
     from slowapi import Limiter, _rate_limit_exceeded_handler
     from slowapi.errors import RateLimitExceeded
@@ -697,6 +709,66 @@ async def chat(request: Request, req: ChatRequest):
         stream_ollama(req.model, system + history, temperature),
         media_type="application/x-ndjson",
     )
+
+
+# --------------------------------------------------------------------------
+# Shareable reports (Supabase)
+# --------------------------------------------------------------------------
+
+class ReportCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=500)
+    content: str = Field(..., min_length=1)
+
+
+class ReportOut(BaseModel):
+    id: str
+    title: str
+    content: str
+    created_at: str
+
+
+@app.post("/api/reports", status_code=201)
+async def create_report(req: ReportCreate):
+    if _supabase is None:
+        raise HTTPException(503, "Reports storage is not configured on this server.")
+    report_id = secrets.token_urlsafe(8)
+
+    def insert():
+        return (
+            _supabase.table("reports")
+            .insert({"id": report_id, "title": req.title, "content": req.content})
+            .execute()
+        )
+
+    try:
+        await run_in_threadpool(insert)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to save report: {exc}") from exc
+    return {"id": report_id}
+
+
+@app.get("/api/reports/{report_id}", response_model=ReportOut)
+async def get_report(report_id: str):
+    if _supabase is None:
+        raise HTTPException(503, "Reports storage is not configured on this server.")
+
+    def fetch():
+        return (
+            _supabase.table("reports")
+            .select("id, title, content, created_at")
+            .eq("id", report_id)
+            .single()
+            .execute()
+        )
+
+    try:
+        result = await run_in_threadpool(fetch)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to fetch report: {exc}") from exc
+
+    if not result.data:
+        raise HTTPException(404, "Report not found.")
+    return result.data
 
 
 if __name__ == "__main__":
