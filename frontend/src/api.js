@@ -45,6 +45,20 @@ export async function analyzeSpreadsheet(file, name) {
   return res.json();
 }
 
+/** Save a report to Supabase; returns { id }. */
+export const createReport = (title, content) =>
+  postJSON("/api/reports", { title, content });
+
+/** Fetch a shared report by id. */
+export async function getReport(id) {
+  const res = await fetch(url(`/api/reports/${id}`));
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    throw new Error(payload.detail || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
 /**
  * Stream a chat completion.
  * @param {object} params { model, messages, attachedFiles:[{name,content}], mode, dataContext }

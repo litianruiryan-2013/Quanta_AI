@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import Home from "./Home.jsx";
+import SharedReport from "./SharedReport.jsx";
 import DataPanel from "./components/FileTree.jsx";
 import Chat from "./components/Chat.jsx";
 import MarketDashboard from "./components/MarketDashboard.jsx";
@@ -417,6 +418,7 @@ export default function App() {
       />
       <Route path="/app" element={<Navigate to="/app/strategy" replace />} />
       <Route path="/app/:module" element={<AppShell />} />
+      <Route path="/shared/:id" element={<SharedReport />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

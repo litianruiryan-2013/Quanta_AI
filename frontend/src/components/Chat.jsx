@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { BarChart3, Brain, Network, TrendingUp } from "lucide-react";
 import Message from "./Message.jsx";
 import QuantaLoader from "./QuantaLoader.jsx";
-import { streamChat } from "../api.js";
+import { streamChat, createReport } from "../api.js";
 
 const MODE_CONFIG = {
   strategy: {
@@ -66,6 +66,8 @@ export default function Chat({
   const [input, setInput]   = useState("");
   const [busy, setBusy]     = useState(false);
   const [error, setError]   = useState(null);
+  const [shareState, setShareState] = useState(null); // null | {status,id?,message?}
+  const [copied, setCopied] = useState(false);
   const abortRef  = useRef(null);
   const scrollRef = useRef(null);
   const shouldReduce = useReducedMotion();
@@ -125,7 +127,41 @@ export default function Chat({
   }, [pendingPrompt, busy, send, onPendingConsumed]);
 
   const stop  = () => abortRef.current?.abort();
-  const clear = () => { stop(); setMessages([]); setError(null); };
+  const clear = () => { stop(); setMessages([]); setError(null); setShareState(null); setCopied(false); };
+
+  // Derive the last completed assistant reply and its preceding user prompt.
+  const lastAssistantIdx = messages.map((m, i) => ({ m, i }))
+    .filter(({ m }) => m.role === "assistant" && m.content)
+    .at(-1)?.i ?? -1;
+  const lastAssistantContent = lastAssistantIdx >= 0 ? messages[lastAssistantIdx].content : null;
+  const lastUserContent = messages
+    .slice(0, lastAssistantIdx)
+    .filter((m) => m.role === "user")
+    .at(-1)?.content ?? null;
+
+  const shareTitle = (lastUserContent ?? "QUANTA Analysis").trim().slice(0, 120);
+
+  const handleShare = async () => {
+    if (!lastAssistantContent) return;
+    setShareState({ status: "loading" });
+    try {
+      const { id } = await createReport(shareTitle, lastAssistantContent);
+      setShareState({ status: "done", id });
+    } catch (err) {
+      setShareState({ status: "error", message: err.message });
+    }
+  };
+
+  const shareLink = shareState?.id
+    ? `${window.location.origin}/shared/${shareState.id}`
+    : "";
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(shareLink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   const cfg = MODE_CONFIG[mode] ?? MODE_CONFIG.strategy;
   const ModeIcon = cfg.icon;
@@ -172,13 +208,69 @@ export default function Chat({
             : "● Ollama offline"}
         </span>
 
+        {/* Share Report button — only when a completed AI reply exists */}
+        {lastAssistantContent && !busy && (
+          <div className="relative ml-auto flex items-center">
+            {/* Glow layer */}
+            <span
+              aria-hidden
+              className="animate-glow-pulse pointer-events-none absolute inset-0 rounded-lg bg-ember-500/40 blur-md"
+            />
+            <button
+              onClick={handleShare}
+              disabled={shareState?.status === "loading"}
+              className="relative rounded-lg bg-ember-600 px-3 py-1 font-mono text-[11px] font-bold text-ink-950 shadow-ember-glow transition-colors hover:bg-ember-500 disabled:opacity-60"
+            >
+              {shareState?.status === "loading" ? "Saving…" : "Share Report"}
+            </button>
+          </div>
+        )}
+
         <button
           onClick={clear}
-          className="ml-auto rounded px-2 py-1 text-xs text-ink-300 hover:bg-ink-800 hover:text-ink-100"
+          className={`${lastAssistantContent && !busy ? "" : "ml-auto"} rounded px-2 py-1 text-xs text-ink-300 hover:bg-ink-800 hover:text-ink-100`}
         >
           Clear
         </button>
       </div>
+
+      {/* Share result panel */}
+      {shareState?.status === "done" && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-ink-700 bg-ink-900 px-4 py-2">
+          <span className="font-mono text-[11px] text-mint-400">✓ Report saved —</span>
+          <code className="min-w-0 flex-1 truncate rounded bg-ink-800 px-2 py-0.5 font-mono text-[11px] text-ink-300">
+            {shareLink}
+          </code>
+          <button
+            onClick={handleCopy}
+            className="shrink-0 rounded border border-ink-700 px-2 py-0.5 font-mono text-[11px] text-ink-300 transition-colors hover:border-ember-500 hover:text-ember-500"
+          >
+            {copied ? "Copied!" : "Copy"}
+          </button>
+          <button
+            onClick={() => setShareState(null)}
+            className="shrink-0 text-ink-500 hover:text-ink-300"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {shareState?.status === "error" && (
+        <div className="flex items-center gap-2 border-b border-red-400/30 bg-red-400/10 px-4 py-2">
+          <span className="flex-1 font-mono text-[11px] text-red-400">
+            Share failed: {shareState.message}
+          </span>
+          <button
+            onClick={() => setShareState(null)}
+            className="shrink-0 text-red-400/60 hover:text-red-400"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Data context chip */}
       {dataContext && (
