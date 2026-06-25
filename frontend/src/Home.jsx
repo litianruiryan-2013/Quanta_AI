@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { Activity, Brain, LineChart } from "lucide-react";
+import { useAuth } from "./AuthContext.jsx";
 
 const CARDS = [
   {
@@ -38,6 +39,11 @@ const ease = [0.16, 1, 0.3, 1];
 
 export default function Home({ onLaunch, theme, onToggleTheme }) {
   const shouldReduce = useReducedMotion();
+  const { session, openModal, signOut } = useAuth();
+  const user     = session?.user;
+  const avatar   = user?.user_metadata?.avatar_url;
+  const name     = user?.user_metadata?.full_name || user?.user_metadata?.name;
+  const initials = user ? (name || user.email || "?")[0].toUpperCase() : null;
 
   return (
     <div className="flex min-h-full flex-col bg-ink-950 text-ink-100">
@@ -47,15 +53,42 @@ export default function Home({ onLaunch, theme, onToggleTheme }) {
           Q
         </div>
         <span className="font-mono text-sm font-bold tracking-[0.2em] text-ink-100">QUANTA</span>
-        <motion.button
-          onClick={onToggleTheme}
-          aria-label="Toggle color theme"
-          whileHover={shouldReduce ? {} : { scale: 1.05 }}
-          whileTap={shouldReduce ? {} : { scale: 0.95 }}
-          className="ml-auto rounded-lg border border-ink-700 px-2.5 py-1 text-xs text-ink-300 transition-colors hover:bg-ink-800 hover:text-ink-100"
-        >
-          {theme === "dark" ? "☀️ Light" : "🌙 Dark"}
-        </motion.button>
+        <div className="ml-auto flex items-center gap-2">
+          {user ? (
+            <>
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-ember-600 font-mono text-[10px] font-bold text-ink-950">
+                {avatar
+                  ? <img src={avatar} alt={initials} className="h-full w-full object-cover" />
+                  : initials}
+              </div>
+              <span className="hidden max-w-[140px] truncate font-mono text-xs text-ink-300 sm:block">
+                {name || user.email}
+              </span>
+              <button
+                onClick={signOut}
+                className="rounded-lg border border-ink-700 px-2.5 py-1 text-xs text-ink-300 transition-colors hover:bg-ink-800 hover:text-ink-100"
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={openModal}
+              className="rounded-lg border border-ember-500/50 px-2.5 py-1 font-mono text-xs font-semibold text-ember-500 transition-colors hover:bg-ember-600/10"
+            >
+              Sign in
+            </button>
+          )}
+          <motion.button
+            onClick={onToggleTheme}
+            aria-label="Toggle color theme"
+            whileHover={shouldReduce ? {} : { scale: 1.05 }}
+            whileTap={shouldReduce ? {} : { scale: 0.95 }}
+            className="rounded-lg border border-ink-700 px-2.5 py-1 text-xs text-ink-300 transition-colors hover:bg-ink-800 hover:text-ink-100"
+          >
+            {theme === "dark" ? "☀️ Light" : "🌙 Dark"}
+          </motion.button>
+        </div>
       </header>
 
       {/* Hero */}

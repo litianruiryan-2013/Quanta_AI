@@ -3,6 +3,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import Home from "./Home.jsx";
 import SharedReport from "./SharedReport.jsx";
+import AuthCallback from "./AuthCallback.jsx";
+import { useAuth } from "./AuthContext.jsx";
 import DataPanel from "./components/FileTree.jsx";
 import Chat from "./components/Chat.jsx";
 import MarketDashboard from "./components/MarketDashboard.jsx";
@@ -30,6 +32,56 @@ const MODULE_TO_SLUG = {
   "commodity_arbitrage":  "commodity-arbitrage",
   "simulator":            "trading",
 };
+
+// Compact auth widget — sign-in button or avatar + sign-out.
+function UserWidget({ compact = false }) {
+  const { session, openModal, signOut } = useAuth();
+
+  if (!session) {
+    return (
+      <button
+        onClick={openModal}
+        className="rounded-lg border border-ink-700 px-2.5 py-1.5 font-mono text-[11px] font-semibold text-ink-300 transition-colors hover:border-ember-500/60 hover:text-ember-500"
+      >
+        Sign in
+      </button>
+    );
+  }
+
+  const user     = session.user;
+  const avatar   = user.user_metadata?.avatar_url;
+  const name     = user.user_metadata?.full_name || user.user_metadata?.name;
+  const initials = (name || user.email || "?")[0].toUpperCase();
+
+  if (compact) {
+    return (
+      <button
+        onClick={signOut}
+        title={`Signed in as ${user.email}\nClick to sign out`}
+        className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-ember-600 font-mono text-[10px] font-bold text-ink-950 hover:opacity-80"
+      >
+        {avatar ? <img src={avatar} alt={initials} className="h-full w-full object-cover" /> : initials}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-ember-600 font-mono text-[10px] font-bold text-ink-950">
+        {avatar ? <img src={avatar} alt={initials} className="h-full w-full object-cover" /> : initials}
+      </div>
+      <span className="max-w-[120px] truncate font-mono text-[11px] text-ink-300">
+        {name || user.email}
+      </span>
+      <button
+        onClick={signOut}
+        className="rounded px-2 py-0.5 font-mono text-[11px] text-ink-500 transition-colors hover:bg-ink-800 hover:text-ink-100"
+      >
+        Sign out
+      </button>
+    </div>
+  );
+}
 
 function AppShell() {
   const navigate   = useNavigate();
@@ -245,6 +297,7 @@ function AppShell() {
             className="shrink-0 rounded-lg border border-ink-700 px-2 py-1 text-xs text-ink-300">
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
+          <UserWidget compact />
         </header>
 
         <main className="relative min-h-0 flex-1">
@@ -318,6 +371,8 @@ function AppShell() {
         <span className="rounded-full border border-ink-700 px-2 py-0.5 font-mono text-[10px] text-ink-500">
           offline · free
         </span>
+
+        <UserWidget />
 
         <button
           onClick={toggleTheme}
@@ -419,6 +474,7 @@ export default function App() {
       <Route path="/app" element={<Navigate to="/app/strategy" replace />} />
       <Route path="/app/:module" element={<AppShell />} />
       <Route path="/shared/:id" element={<SharedReport />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
