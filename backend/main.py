@@ -594,7 +594,12 @@ async def stream_groq(model: str, messages: list, temperature: float):
     """Stream NDJSON deltas from Groq's OpenAI-compatible chat completions API."""
     url = f"{GROQ_BASE_URL}/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    body = {"model": model, "messages": messages, "stream": True, "temperature": temperature}
+    body = {
+    "model": model,
+    "messages": messages,
+    "tools": TOOL_DEFS,
+    "tool_choice": "auto",
+}
     try:
         async with httpx.AsyncClient(timeout=None) as client:
             async with client.stream("POST", url, headers=headers, json=body) as response:
@@ -712,6 +717,198 @@ async def chat(request: Request, req: ChatRequest):
         stream_ollama(req.model, system + history, temperature),
         media_type="application/x-ndjson",
     )
+
+
+# --------------------------------------------------------------------------
+# Agent Chat — tool-calling scaffold (Groq)
+#
+# Groq uses the OpenAI-compatible tool-calling format:
+#
+#   Request: include "tools": TOOL_DEFS and "tool_choice": "auto"
+#
+#   Response (model wants a tool):
+#     choices[0].finish_reason == "tool_calls"
+#     choices[0].message == {
+#       "role": "assistant",
+#       "content": null,
+#       "tool_calls": [
+#         {
+#           "id": "call_abc123",
+#           "type": "function",
+#           "function": {
+#             "name": "get_quotes",
+#             "arguments": "{\"tickers\": [\"AAPL\"]}"   ← JSON string, not dict
+#           }
+#         }
+#       ]
+#     }
+#
+#   After running the tool, append to messages:
+#     {"role": "tool", "tool_call_id": "call_abc123", "content": "<result as JSON string>"}
+#   Then call Groq again. Repeat until finish_reason == "stop".
+# --------------------------------------------------------------------------
+
+TOOL_DEFS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_quotes",
+            "description": (
+                "Fetch live price quotes for one or more ticker symbols from Yahoo Finance. "
+                "Use standard symbols: equities (AAPL), FX pairs (EURUSD=X), "
+                "indices (^GSPC), crypto (BTC-USD)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tickers": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": 'Ticker symbols to look up, e.g. ["AAPL", "BTC-USD"].',
+                    }
+                },
+                "required": ["tickers"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_market_history",
+            "description": (
+                "Get historical price performance for a ticker over a time period. "
+                "Use for questions about trends, performance, or how a price has changed over time."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticker": {"type": "string", "description": "Ticker symbol, e.g. AAPL"},
+                    "period": {"type": "string", "description": "e.g. 1mo, 3mo, 6mo, 1y, 5y"},
+                },
+                "required": ["ticker", "period"],
+            },
+        },
+    },
+]
+
+
+def _sync_get_quotes(tickers: List[str]) -> dict:
+    """Synchronous quote fetch — mirrors /api/quotes logic; safe for run_in_threadpool."""
+    symbols = [t.strip().upper() for t in tickers if t.strip()]
+    out: Dict[str, dict] = {}
+    errs: Dict[str, str] = {}
+    for sym in symbols:
+        try:
+            t = yf.Ticker(sym)
+            hist = t.history(period="1mo", interval="1d", auto_adjust=False)
+            closes = hist["Close"].dropna() if hist is not None and not hist.empty else None
+            if closes is None or closes.empty:
+                errs[sym] = "no data (check symbol)"
+                continue
+            last = float(closes.iloc[-1])
+            prev = float(closes.iloc[-2]) if len(closes) >= 2 else last
+            change = last - prev
+            change_pct = (change / prev * 100) if prev else None
+            out[sym] = {
+                "price": _clean_number(last),
+                "prev_close": _clean_number(prev),
+                "change": _clean_number(change),
+                "change_pct": _clean_number(change_pct),
+            }
+        except Exception as exc:
+            errs[sym] = str(exc)
+    return {"quotes": out, "errors": errs}
+
+def _sync_get_history(ticker: str, period: str) -> dict:
+    t = yf.Ticker(ticker.strip().upper())
+    hist = t.history(period=period, interval="1d", auto_adjust=True)
+    if hist is None or hist.empty:
+        return {"error": "no data (check symbol)"}
+    closes = hist["Close"].dropna()
+    first, last = float(closes.iloc[0]), float(closes.iloc[-1])
+    return {
+        "ticker": ticker.upper(),
+        "period": period,
+        "start_price": _clean_number(first),
+        "end_price": _clean_number(last),
+        "change_pct": _clean_number((last - first) / first * 100),
+        "high": _clean_number(float(closes.max())),
+        "low": _clean_number(float(closes.min())),
+    }
+
+async def run_tool(name: str, arguments: dict):
+    """Dispatch a tool call by name to its implementation."""
+    if name == "get_quotes":
+        tickers = arguments.get("tickers", [])
+        return await run_in_threadpool(_sync_get_quotes, tickers)
+    if name == "get_market_history":
+        return await run_in_threadpool(
+            _sync_get_history, arguments.get("ticker", ""), arguments.get("period", "1mo")
+        )
+    raise ValueError(f"Unknown tool: {name!r}")
+
+
+class AgentChatRequest(BaseModel):
+    messages: List[ChatMessage]
+    model: str = GROQ_MODEL
+
+
+@app.post("/api/agent-chat")
+@ratelimit("20/minute")
+async def agent_chat(request: Request, req: AgentChatRequest):
+    if not GROQ_API_KEY:
+        raise HTTPException(503, "GROQ_API_KEY is not set — agent-chat requires Groq.")
+
+    messages = [m.model_dump() for m in req.messages]
+    model = req.model if req.model in (GROQ_FREE_MODELS + [GROQ_MODEL]) else GROQ_MODEL
+
+    # TODO: agent loop
+    for iteration in range(5):
+        url = f"{GROQ_BASE_URL}/chat/completions"
+        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+        body = {"model": model, "messages": messages, "tools": TOOL_DEFS, "tool_choice": "auto"}
+        print("MSG COUNT:", len(messages), [m["role"] for m in messages])
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                response = await client.post(url, headers=headers, json=body)
+            data = response.json()
+            if "error" in data:
+                raise HTTPException(502, f"Groq: {data['error'].get('message')}")
+            
+            print(data)
+            choice = data["choices"][0]
+            finish = choice["finish_reason"]
+            msg = choice["message"]
+            
+        except httpx.ConnectError:
+            raise HTTPException(502, "Could not reach the Groq API.")
+        
+        if "error" in data:
+                raise HTTPException(502, f"Groq: {data['error'].get('message')}")
+        
+        if finish == "stop":
+            return {"content": msg["content"]}
+        messages.append(msg)
+
+        for call in msg["tool_calls"]:
+            name = call["function"]["name"]
+            args = json.loads(call["function"]["arguments"])
+            result = await run_tool(name, args)
+            print("TOOL RESULT:", result)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": call["id"],
+                "content": json.dumps(result),
+            })
+    return {"content": "Hit the iteration limit."}
+
+
+    # 1. POST to GROQ_BASE_URL/chat/completions with messages, TOOL_DEFS, tool_choice="auto"
+    # 2. If finish_reason == "tool_calls": parse tool_calls, run run_tool() for each,
+    #    append assistant message (with tool_calls) + tool result messages, loop back to 1.
+    # 3. If finish_reason == "stop": return choices[0].message.content to the client.
+    # 4. Guard against infinite loops with a max-iterations cap (e.g. 10).
+
 
 
 # --------------------------------------------------------------------------
