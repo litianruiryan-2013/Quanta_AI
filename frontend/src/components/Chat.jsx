@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { BarChart3, Brain, Network, TrendingUp } from "lucide-react";
+import { BarChart3, Bot, Brain, Network, TrendingUp } from "lucide-react";
 import Message from "./Message.jsx";
 import QuantaLoader from "./QuantaLoader.jsx";
-import { streamChat, createReport } from "../api.js";
+import { streamChat, sendAgentChat, createReport } from "../api.js";
 
 const MODE_CONFIG = {
   strategy: {
@@ -54,6 +54,18 @@ const MODE_CONFIG = {
     ],
     placeholder: "Ask about price spreads, arbitrage windows, or regional anomalies…",
   },
+  agent: {
+    icon: Bot,
+    label: "Agent",
+    description:
+      "Agentic AI with live tool access — looks up real-time prices and market history via Groq tool-calling. Responses take 5–15 seconds.",
+    suggestions: [
+      "What's the current price of AAPL?",
+      "How has TSLA performed over the last 3 months?",
+      "Compare the YTD performance of AAPL and MSFT",
+    ],
+    placeholder: "Ask about live prices, market history, or portfolio moves… (Enter to send)",
+  },
 };
 
 const ease = [0.16, 1, 0.3, 1];
@@ -92,18 +104,27 @@ export default function Chat({
       abortRef.current = controller;
 
       try {
-        await streamChat(
-          { model, messages: history, attachedFiles: [], mode, dataContext: dataContext?.text || null },
-          (delta) => {
-            setMessages((prev) => {
-              const next = [...prev];
-              const last = next[next.length - 1];
-              next[next.length - 1] = { ...last, content: last.content + delta };
-              return next;
-            });
-          },
-          controller.signal
-        );
+        if (mode === "agent") {
+          const result = await sendAgentChat({ model, messages: history }, controller.signal);
+          setMessages((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = { ...next[next.length - 1], content: result.content };
+            return next;
+          });
+        } else {
+          await streamChat(
+            { model, messages: history, attachedFiles: [], mode, dataContext: dataContext?.text || null },
+            (delta) => {
+              setMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                next[next.length - 1] = { ...last, content: last.content + delta };
+                return next;
+              });
+            },
+            controller.signal
+          );
+        }
       } catch (err) {
         if (err.name !== "AbortError") {
           setError(err.message);

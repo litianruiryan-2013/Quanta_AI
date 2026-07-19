@@ -59,6 +59,21 @@ export async function getReport(id) {
   return res.json();
 }
 
+/** Send a single-turn agent chat request (non-streaming). Returns { content }. */
+export async function sendAgentChat({ model, messages }, signal) {
+  const res = await fetch(url("/api/agent-chat"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, messages }),
+    signal,
+  });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    throw new Error(payload.detail || `Agent request failed (${res.status})`);
+  }
+  return res.json();
+}
+
 /**
  * Stream a chat completion.
  * @param {object} params { model, messages, attachedFiles:[{name,content}], mode, dataContext }

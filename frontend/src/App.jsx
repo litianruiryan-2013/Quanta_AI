@@ -23,6 +23,7 @@ const SLUG_TO_MODULE = {
   "fx-treasury":          "fx_treasury",
   "commodity-arbitrage":  "commodity_arbitrage",
   "trading":              "simulator",
+  "agent":                "agent",
 };
 
 const MODULE_TO_SLUG = {
@@ -31,6 +32,7 @@ const MODULE_TO_SLUG = {
   "fx_treasury":          "fx-treasury",
   "commodity_arbitrage":  "commodity-arbitrage",
   "simulator":            "trading",
+  "agent":                "agent",
 };
 
 // Compact auth widget — sign-in button or avatar + sign-out.
@@ -291,6 +293,7 @@ function AppShell() {
             <option value="fx_treasury">📈 FX Treasury</option>
             <option value="commodity_arbitrage">💎 Commodity Arb</option>
             <option value="simulator">💹 Paper Trading</option>
+            <option value="agent">🤖 Agent</option>
           </select>
           <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${ollamaOk ? "bg-mint-400" : "bg-red-400"}`} />
           <button onClick={toggleTheme} aria-label="Toggle theme"
@@ -346,6 +349,7 @@ function AppShell() {
           <option value="fx_treasury">📈  FX Treasury</option>
           <option value="commodity_arbitrage">💎  Commodity Arbitrage</option>
           <option value="simulator">💹  Paper Trading</option>
+          <option value="agent">🤖  Agent</option>
         </select>
 
         <div className="flex-1" />
