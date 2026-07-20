@@ -16,6 +16,15 @@ import Simulator from "./components/Simulator.jsx";
 import useMediaQuery from "./useMediaQuery.js";
 import { getHealth, analyzeSpreadsheet } from "./api.js";
 
+const MODULES = [
+  { id: "agent",               emoji: "🤖", label: "Agent" },
+  { id: "strategy",            emoji: "♟",  label: "Strategy" },
+  { id: "supply_chain",        emoji: "🌐", label: "Supply Chain" },
+  { id: "fx_treasury",         emoji: "📈", label: "FX Treasury" },
+  { id: "commodity_arbitrage", emoji: "💎", label: "Commodity Arb" },
+  { id: "simulator",           emoji: "💹", label: "Paper Trading" },
+];
+
 // URL slug ↔ internal module name
 const SLUG_TO_MODULE = {
   "strategy":             "strategy",
@@ -34,6 +43,44 @@ const MODULE_TO_SLUG = {
   "simulator":            "trading",
   "agent":                "agent",
 };
+
+function ModuleNav({ currentModule, onSwitch, className = "" }) {
+  const btnRefs = useRef({});
+
+  useEffect(() => {
+    btnRefs.current[currentModule]?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [currentModule]);
+
+  return (
+    <div
+      className={`flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden ${className}`}
+      style={{ scrollbarWidth: "none" }}
+    >
+      {MODULES.map(({ id, emoji, label }) => {
+        const active = id === currentModule;
+        return (
+          <button
+            key={id}
+            ref={(el) => { btnRefs.current[id] = el; }}
+            onClick={() => onSwitch(id)}
+            className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 py-1 font-mono text-[11px] font-semibold transition-colors ${
+              active
+                ? "bg-ember-600 text-ink-950"
+                : "border border-ink-700 text-ink-300 hover:border-ink-500 hover:text-ink-100"
+            }`}
+          >
+            <span>{emoji}</span>
+            <span>{label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // Compact auth widget — sign-in button or avatar + sign-out.
 function UserWidget({ compact = false }) {
@@ -106,6 +153,7 @@ function AppShell() {
   const [dataContext, setDataContext]   = useState(null);
   const [pendingPrompt, setPendingPrompt] = useState(null);
   const [preview, setPreview]           = useState(null);
+  const [pendingSwitch, setPendingSwitch] = useState(null);
 
   // Layout
   const isMobile    = useMediaQuery("(max-width: 767px)");
@@ -129,6 +177,14 @@ function AppShell() {
     navigate(`/app/${MODULE_TO_SLUG[m] ?? "strategy"}`);
     if (isMobile) setMobileTab("chat");
   }, [navigate, isMobile]);
+
+  const handleModuleSwitch = useCallback((moduleId) => {
+    if (messages.length > 0) {
+      setPendingSwitch(moduleId);
+    } else {
+      setModule(moduleId);
+    }
+  }, [messages.length, setModule]);
 
   const shouldReduce = useReducedMotion();
 
@@ -269,6 +325,47 @@ function AppShell() {
       onClose={() => setPreview(null)} onAnalyze={analyzeWithAI} />
   );
 
+  const switchingTo = MODULES.find((m) => m.id === pendingSwitch);
+  const confirmDialog = pendingSwitch !== null && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/80 backdrop-blur-sm">
+      <div className="w-72 rounded-xl border border-ink-700 bg-ink-900 p-6 shadow-2xl">
+        <p className="mb-1 font-mono text-sm font-semibold text-ink-100">
+          Switch to{" "}
+          <span className="text-ember-500">
+            {switchingTo?.emoji} {switchingTo?.label}
+          </span>
+          ?
+        </p>
+        <p className="mb-5 text-xs text-ink-400">You have an active conversation.</p>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => {
+              setMessages([]);
+              setDataContext(null);
+              setModule(pendingSwitch);
+              setPendingSwitch(null);
+            }}
+            className="rounded-lg bg-ember-600 px-4 py-2 font-mono text-xs font-bold text-ink-950 transition-colors hover:bg-ember-500"
+          >
+            New chat
+          </button>
+          <button
+            onClick={() => { setModule(pendingSwitch); setPendingSwitch(null); }}
+            className="rounded-lg border border-ink-700 px-4 py-2 font-mono text-xs text-ink-300 transition-colors hover:bg-ink-800 hover:text-ink-100"
+          >
+            Keep conversation
+          </button>
+          <button
+            onClick={() => setPendingSwitch(null)}
+            className="py-1 text-xs text-ink-500 transition-colors hover:text-ink-300"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   // ============================ MOBILE ============================
   if (isMobile) {
     const TABS = [
@@ -278,23 +375,17 @@ function AppShell() {
       { id: "chat",   label: "Chat",   icon: "💬" },
     ];
     return (
+      <>
       <div className="flex h-full flex-col">
         <header className="flex items-center gap-2 border-b border-ink-700 bg-ink-900 px-3 py-2">
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-ember-600 font-mono text-xs font-bold text-ink-950">
             Q
           </div>
-          <select
-            value={currentModule}
-            onChange={(e) => setModule(e.target.value)}
-            className="min-w-0 flex-1 rounded border border-ink-700 bg-ink-900 py-0.5 font-mono text-xs text-ink-100 focus:border-ember-500 focus:outline-none"
-          >
-            <option value="strategy">♟ Strategy</option>
-            <option value="supply_chain">🌐 Supply Chain</option>
-            <option value="fx_treasury">📈 FX Treasury</option>
-            <option value="commodity_arbitrage">💎 Commodity Arb</option>
-            <option value="simulator">💹 Paper Trading</option>
-            <option value="agent">🤖 Agent</option>
-          </select>
+          <ModuleNav
+            currentModule={currentModule}
+            onSwitch={handleModuleSwitch}
+            className="min-w-0 flex-1"
+          />
           <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${ollamaOk ? "bg-mint-400" : "bg-red-400"}`} />
           <button onClick={toggleTheme} aria-label="Toggle theme"
             className="shrink-0 rounded-lg border border-ink-700 px-2 py-1 text-xs text-ink-300">
@@ -322,11 +413,14 @@ function AppShell() {
           ))}
         </nav>
       </div>
+      {confirmDialog}
+      </>
     );
   }
 
   // ============================ DESKTOP ============================
   return (
+    <>
     <div className="flex h-full flex-col">
       {/* ── Top bar ── */}
       <header className="flex h-12 shrink-0 items-center gap-4 border-b border-ink-700 bg-ink-900 px-5">
@@ -337,20 +431,7 @@ function AppShell() {
           <span className="font-mono text-sm font-bold tracking-[0.15em] text-ink-100">QUANTA</span>
         </div>
 
-        <div className="h-5 w-px shrink-0 bg-ink-700" />
-
-        <select
-          value={currentModule}
-          onChange={(e) => setModule(e.target.value)}
-          className="rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 font-mono text-xs font-semibold text-ink-100 transition-colors hover:border-ink-500 focus:border-ember-500 focus:outline-none"
-        >
-          <option value="strategy">♟  Strategy</option>
-          <option value="supply_chain">🌐  Supply Chain Risk</option>
-          <option value="fx_treasury">📈  FX Treasury</option>
-          <option value="commodity_arbitrage">💎  Commodity Arbitrage</option>
-          <option value="simulator">💹  Paper Trading</option>
-          <option value="agent">🤖  Agent</option>
-        </select>
+        <ModuleNav currentModule={currentModule} onSwitch={handleModuleSwitch} />
 
         <div className="flex-1" />
 
@@ -443,6 +524,8 @@ function AppShell() {
         </section>
       </main>
     </div>
+    {confirmDialog}
+    </>
   );
 }
 
