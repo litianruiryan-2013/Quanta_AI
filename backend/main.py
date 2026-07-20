@@ -595,11 +595,11 @@ async def stream_groq(model: str, messages: list, temperature: float):
     url = f"{GROQ_BASE_URL}/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     body = {
-    "model": model,
-    "messages": messages,
-    "tools": TOOL_DEFS,
-    "tool_choice": "auto",
-}
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "stream": True,
+    }
     try:
         async with httpx.AsyncClient(timeout=None) as client:
             async with client.stream("POST", url, headers=headers, json=body) as response:
