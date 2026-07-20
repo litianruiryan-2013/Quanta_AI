@@ -469,13 +469,13 @@ export default function App() {
         path="/"
         element={
           <Home
-            onLaunch={() => navigate("/app/strategy")}
+            onLaunch={() => navigate("/app/agent")}
             theme={theme}
             onToggleTheme={toggleTheme}
           />
         }
       />
-      <Route path="/app" element={<Navigate to="/app/strategy" replace />} />
+      <Route path="/app" element={<Navigate to="/app/agent" replace />} />
       <Route path="/app/:module" element={<AppShell />} />
       <Route path="/shared/:id" element={<SharedReport />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
