@@ -4,7 +4,6 @@ import { BarChart3, Bot, Brain, Network, TrendingUp } from "lucide-react";
 import Message from "./Message.jsx";
 import QuantaLoader from "./QuantaLoader.jsx";
 import { streamChat, sendAgentChat, createReport } from "../api.js";
-import { downloadPdf } from "../utils/exportPdf.js";
 
 const MODE_CONFIG = {
   strategy: {
@@ -185,11 +184,6 @@ export default function Chat({
     });
   };
 
-  const handleDownloadPdf = useCallback(() => {
-    if (!lastAssistantContent) return;
-    downloadPdf(lastAssistantContent, cfg.label, shareTitle);
-  }, [lastAssistantContent, cfg.label, shareTitle]);
-
   const cfg = MODE_CONFIG[mode] ?? MODE_CONFIG.strategy;
   const ModeIcon = cfg.icon;
   const msgTransition = shouldReduce ? { duration: 0 } : { duration: 0.3, ease };
@@ -235,29 +229,21 @@ export default function Chat({
             : "● Ollama offline"}
         </span>
 
-        {/* Action buttons — only when a completed AI reply exists */}
+        {/* Share Report button — only when a completed AI reply exists */}
         {lastAssistantContent && !busy && (
-          <div className="ml-auto flex items-center gap-2">
+          <div className="relative ml-auto flex items-center">
+            {/* Glow layer */}
+            <span
+              aria-hidden
+              className="animate-glow-pulse pointer-events-none absolute inset-0 rounded-lg bg-ember-500/40 blur-md"
+            />
             <button
-              onClick={handleDownloadPdf}
-              className="rounded-lg border border-ink-700 px-3 py-1 font-mono text-[11px] font-semibold text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100"
+              onClick={handleShare}
+              disabled={shareState?.status === "loading"}
+              className="relative rounded-lg bg-ember-600 px-3 py-1 font-mono text-[11px] font-bold text-ink-950 shadow-ember-glow transition-colors hover:bg-ember-500 disabled:opacity-60"
             >
-              Download PDF
+              {shareState?.status === "loading" ? "Saving…" : "Share Report"}
             </button>
-            <div className="relative flex items-center">
-              {/* Glow layer */}
-              <span
-                aria-hidden
-                className="animate-glow-pulse pointer-events-none absolute inset-0 rounded-lg bg-ember-500/40 blur-md"
-              />
-              <button
-                onClick={handleShare}
-                disabled={shareState?.status === "loading"}
-                className="relative rounded-lg bg-ember-600 px-3 py-1 font-mono text-[11px] font-bold text-ink-950 shadow-ember-glow transition-colors hover:bg-ember-500 disabled:opacity-60"
-              >
-                {shareState?.status === "loading" ? "Saving…" : "Share Report"}
-              </button>
-            </div>
           </div>
         )}
 
