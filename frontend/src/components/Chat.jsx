@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { BarChart3, Bot, Brain, Network, TrendingUp } from "lucide-react";
+import { BarChart3, Bot, Brain, Network, Paperclip, TrendingUp } from "lucide-react";
 import Message from "./Message.jsx";
 import QuantaLoader from "./QuantaLoader.jsx";
-import { streamChat, sendAgentChat, createReport } from "../api.js";
+import { streamChat, sendAgentChat, createReport, createConversation, updateConversation } from "../api.js";
+import { useAuth } from "../AuthContext.jsx";
+
+const DATA_ACCEPT = ".csv,.tsv,.xlsx,.xls";
 
 const MODE_CONFIG = {
   strategy: {
@@ -74,15 +77,24 @@ export default function Chat({
   model, models, onModelChange, ollamaOk,
   mode, onModeChange, dataContext, onClearDataContext,
   pendingPrompt, onPendingConsumed, messages, setMessages, provider,
+  conversationId, onConversationSaved, onFileAttach,
 }) {
+  const { session } = useAuth();
   const [input, setInput]   = useState("");
   const [busy, setBusy]     = useState(false);
   const [error, setError]   = useState(null);
   const [shareState, setShareState] = useState(null); // null | {status,id?,message?}
   const [copied, setCopied] = useState(false);
-  const abortRef  = useRef(null);
-  const scrollRef = useRef(null);
+  const abortRef   = useRef(null);
+  const scrollRef  = useRef(null);
+  const fileRef    = useRef(null);
+  const convIdRef  = useRef(null);
   const shouldReduce = useReducedMotion();
+
+  // Keep convIdRef in sync with the conversationId prop (loaded from history or newly saved).
+  useEffect(() => { convIdRef.current = conversationId ?? null; }, [conversationId]);
+  // Reset when messages are cleared externally (new chat).
+  useEffect(() => { if (messages.length === 0) convIdRef.current = null; }, [messages.length]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -103,9 +115,12 @@ export default function Chat({
       const controller = new AbortController();
       abortRef.current = controller;
 
+      let finalContent = "";
+
       try {
         if (mode === "agent") {
           const result = await sendAgentChat({ model, messages: history }, controller.signal);
+          finalContent = result.content;
           setMessages((prev) => {
             const next = [...prev];
             next[next.length - 1] = { ...next[next.length - 1], content: result.content };
@@ -115,6 +130,7 @@ export default function Chat({
           await streamChat(
             { model, messages: history, attachedFiles: [], mode, dataContext: dataContext?.text || null },
             (delta) => {
+              finalContent += delta;
               setMessages((prev) => {
                 const next = [...prev];
                 const last = next[next.length - 1];
@@ -124,6 +140,24 @@ export default function Chat({
             },
             controller.signal
           );
+        }
+
+        // Auto-save conversation (silent — never disrupt the chat on failure).
+        const token = session?.access_token;
+        if (token && finalContent) {
+          const finalMessages = [...history, { role: "assistant", content: finalContent }];
+          try {
+            if (!convIdRef.current) {
+              const title = text.slice(0, 120);
+              const { id } = await createConversation({ title, messages: finalMessages, mode }, token);
+              convIdRef.current = id;
+              onConversationSaved?.(id);
+            } else {
+              await updateConversation(convIdRef.current, { messages: finalMessages }, token);
+            }
+          } catch {
+            // silent
+          }
         }
       } catch (err) {
         if (err.name !== "AbortError") {
@@ -137,7 +171,7 @@ export default function Chat({
         abortRef.current = null;
       }
     },
-    [input, busy, messages, model, mode, dataContext]
+    [input, busy, messages, model, mode, dataContext, session?.access_token, onConversationSaved]
   );
 
   useEffect(() => {
@@ -392,6 +426,29 @@ export default function Chat({
       {/* Composer */}
       <div className="border-t border-ink-700 p-3">
         <div className="flex items-end gap-2">
+          {/* Hidden file input for attach */}
+          <input
+            ref={fileRef}
+            type="file"
+            accept={DATA_ACCEPT}
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onFileAttach?.({ file, path: file.name, name: file.name, size: file.size });
+              e.target.value = "";
+            }}
+          />
+          {onFileAttach && (
+            <motion.button
+              onClick={() => fileRef.current?.click()}
+              title="Attach a data file (.csv, .tsv, .xlsx, .xls)"
+              whileHover={shouldReduce ? {} : { scale: 1.05 }}
+              whileTap={shouldReduce ? {} : { scale: 0.95 }}
+              className="shrink-0 self-end rounded-lg border border-ink-700 p-2.5 text-ink-500 transition-colors hover:border-ink-500 hover:text-ink-300"
+            >
+              <Paperclip size={15} strokeWidth={1.75} />
+            </motion.button>
+          )}
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}

@@ -5,7 +5,7 @@ import Home from "./Home.jsx";
 import SharedReport from "./SharedReport.jsx";
 import AuthCallback from "./AuthCallback.jsx";
 import { useAuth } from "./AuthContext.jsx";
-import DataPanel from "./components/FileTree.jsx";
+import ConversationList from "./components/ConversationList.jsx";
 import Chat from "./components/Chat.jsx";
 import MarketDashboard from "./components/MarketDashboard.jsx";
 import SupplyChainChart from "./components/SupplyChainChart.jsx";
@@ -155,6 +155,10 @@ function AppShell() {
   const [preview, setPreview]           = useState(null);
   const [pendingSwitch, setPendingSwitch] = useState(null);
 
+  // Conversation persistence
+  const [conversationId, setConversationId] = useState(null);
+  const [convRefreshKey, setConvRefreshKey] = useState(0);
+
   // Layout
   const isMobile    = useMediaQuery("(max-width: 767px)");
   const [showMarket, setShowMarket] = useState(false);
@@ -252,11 +256,37 @@ function AppShell() {
     [sendEvidenceToAI]
   );
 
+  const onNewChat = useCallback(() => {
+    setMessages([]);
+    setDataContext(null);
+    setConversationId(null);
+  }, []);
+
+  const onLoadConversation = useCallback((conv) => {
+    setMessages(conv.messages || []);
+    setConversationId(conv.id);
+    if (conv.mode && MODULE_TO_SLUG[conv.mode]) {
+      navigate(`/app/${MODULE_TO_SLUG[conv.mode]}`);
+    }
+    if (isMobile) setMobileTab("chat");
+  }, [navigate, isMobile]);
+
+  const handleConvSaved = useCallback((id) => {
+    setConversationId(id);
+    setConvRefreshKey((k) => k + 1);
+  }, []);
+
   const providerLabel = provider === "groq" ? "Groq" : provider === "gemini" ? "Gemini" : "Ollama";
 
   // ---- Shared panels ----
-  const activeFile = dataContext ? dataContext.label.replace(/^📊\s*/, "") : null;
-  const dataPanel = <DataPanel onOpenData={openData} activeFile={activeFile} />;
+  const sidePanel = (
+    <ConversationList
+      onNewChat={onNewChat}
+      onLoadConversation={onLoadConversation}
+      activeConvId={conversationId}
+      refreshKey={convRefreshKey}
+    />
+  );
   const marketPanel = <MarketDashboard onSendToAI={sendEvidenceToAI} theme={theme} />;
   const simulatorPanel = <Simulator onSendToAI={sendEvidenceToAI} theme={theme} />;
 
@@ -318,6 +348,9 @@ function AppShell() {
       dataContext={dataContext} onClearDataContext={() => setDataContext(null)}
       pendingPrompt={pendingPrompt} onPendingConsumed={() => setPendingPrompt(null)}
       messages={messages} setMessages={setMessages}
+      conversationId={conversationId}
+      onConversationSaved={handleConvSaved}
+      onFileAttach={openData}
     />
   );
   const dataPreviewOverlay = preview && (
@@ -369,10 +402,10 @@ function AppShell() {
   // ============================ MOBILE ============================
   if (isMobile) {
     const TABS = [
-      { id: "files",  label: "Data",   icon: "📂" },
-      { id: "market", label: "Chart",  icon: "▲"  },
-      { id: "trade",  label: "Trade",  icon: "💹" },
-      { id: "chat",   label: "Chat",   icon: "💬" },
+      { id: "history", label: "History", icon: "🕐" },
+      { id: "market",  label: "Chart",   icon: "▲"  },
+      { id: "trade",   label: "Trade",   icon: "💹" },
+      { id: "chat",    label: "Chat",    icon: "💬" },
     ];
     return (
       <>
@@ -395,7 +428,7 @@ function AppShell() {
         </header>
 
         <main className="relative min-h-0 flex-1">
-          <div className={`h-full ${mobileTab === "files"  ? "" : "hidden"}`}>{dataPanel}</div>
+          <div className={`h-full ${mobileTab === "history" ? "" : "hidden"}`}>{sidePanel}</div>
           <div className={`h-full overflow-y-auto ${mobileTab === "market" ? "" : "hidden"}`}>{activeChartPanel}</div>
           <div className={`h-full ${mobileTab === "trade"  ? "" : "hidden"}`}>{simulatorPanel}</div>
           <div className={`h-full ${mobileTab === "chat"   ? "" : "hidden"}`}>{chatPanel}</div>
@@ -477,10 +510,10 @@ function AppShell() {
         >
           <div className="shrink-0 border-b border-ink-700 px-4 py-2">
             <h2 className="font-mono text-[10px] font-semibold uppercase tracking-widest text-ink-500">
-              Data
+              History
             </h2>
           </div>
-          <div className="min-h-0 flex-1">{dataPanel}</div>
+          <div className="min-h-0 flex-1">{sidePanel}</div>
         </motion.aside>
 
         <section className="relative flex min-w-0 flex-1 flex-col bg-ink-950">

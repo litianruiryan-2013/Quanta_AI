@@ -59,6 +59,31 @@ export async function getReport(id) {
   return res.json();
 }
 
+// ── Authenticated conversation helpers ──────────────────────────────────────
+
+async function authFetch(path, method, body, token) {
+  const headers = { Authorization: `Bearer ${token}` };
+  if (body != null) headers["Content-Type"] = "application/json";
+  const res = await fetch(url(path), {
+    method,
+    headers,
+    body: body != null ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    throw new Error(payload.detail || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export const listConversations  = (token)       => authFetch("/api/conversations",      "GET",   null, token);
+export const getConversation    = (id, token)   => authFetch(`/api/conversations/${id}`, "GET",  null, token);
+export const createConversation = (data, token) => authFetch("/api/conversations",      "POST",  data, token);
+export const updateConversation = (id, data, token) =>
+  authFetch(`/api/conversations/${id}`, "PATCH", data, token);
+
+// ── LLM helpers ─────────────────────────────────────────────────────────────
+
 /** Send a single-turn agent chat request (non-streaming). Returns { content }. */
 export async function sendAgentChat({ model, messages }, signal) {
   const res = await fetch(url("/api/agent-chat"), {
