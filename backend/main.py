@@ -18,6 +18,7 @@ import json
 import math
 import os
 import secrets
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
@@ -325,9 +326,47 @@ class QuotesRequest(BaseModel):
     tickers: List[str] = Field(..., max_length=50)
 
 
+class ConversationCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=500)
+    messages: List[ChatMessage] = []
+    mode: Optional[str] = None
+
+
+class ConversationUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=500)
+    messages: Optional[List[ChatMessage]] = None
+
+
 # --------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------
+
+async def _require_user(request: Request) -> str:
+    """Verify Supabase JWT from Authorization header; return user_id or raise.
+
+    Makes a real network call to Supabase auth (/user) to validate the token —
+    this catches expired tokens and revoked sessions, not just malformed JWTs.
+    Raises 503 if Supabase is unconfigured, 401 for any auth failure.
+    """
+    if _supabase is None:
+        raise HTTPException(503, "Supabase is not configured on this server.")
+    auth = request.headers.get("authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(401, "Missing or malformed Authorization header.")
+    token = auth[7:]
+
+    def _get_user():
+        return _supabase.auth.get_user(jwt=token)
+
+    try:
+        resp = await run_in_threadpool(_get_user)
+    except Exception as exc:
+        raise HTTPException(401, "Invalid or expired token.") from exc
+
+    if resp.user is None:
+        raise HTTPException(401, "Invalid or expired token.")
+    return str(resp.user.id)
+
 
 def _clean_number(value):
     if value is None:
@@ -936,6 +975,128 @@ async def agent_chat(request: Request, req: AgentChatRequest):
     # 3. If finish_reason == "stop": return choices[0].message.content to the client.
     # 4. Guard against infinite loops with a max-iterations cap (e.g. 10).
 
+
+
+# --------------------------------------------------------------------------
+# Conversation persistence (Supabase)
+#
+# Expected table schema:
+#   CREATE TABLE conversations (
+#       id         uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+#       user_id    text NOT NULL,
+#       title      text NOT NULL,
+#       messages   jsonb NOT NULL DEFAULT '[]',
+#       mode       text,
+#       created_at timestamptz DEFAULT now(),
+#       updated_at timestamptz DEFAULT now()
+#   );
+#   CREATE INDEX conversations_user_id_idx
+#       ON conversations (user_id, created_at DESC);
+# --------------------------------------------------------------------------
+
+@app.post("/api/conversations", status_code=201)
+async def create_conversation(request: Request, req: ConversationCreate):
+    user_id = await _require_user(request)
+
+    def insert():
+        return (
+            _supabase.table("conversations")
+            .insert({
+                "user_id": user_id,
+                "title": req.title,
+                "messages": [m.model_dump() for m in req.messages],
+                "mode": req.mode,
+            })
+            .execute()
+        )
+
+    try:
+        result = await run_in_threadpool(insert)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to create conversation: {exc}") from exc
+
+    row = result.data[0]
+    return {"id": row["id"], "created_at": row["created_at"]}
+
+
+@app.patch("/api/conversations/{conv_id}")
+async def update_conversation(conv_id: str, request: Request, req: ConversationUpdate):
+    user_id = await _require_user(request)
+
+    updates: dict = {}
+    if req.title is not None:
+        updates["title"] = req.title
+    if req.messages is not None:
+        updates["messages"] = [m.model_dump() for m in req.messages]
+    if not updates:
+        raise HTTPException(400, "Request body must include title or messages.")
+
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    def patch():
+        return (
+            _supabase.table("conversations")
+            .update(updates)
+            .eq("id", conv_id)
+            .eq("user_id", user_id)  # ownership check — wrong user → empty result
+            .execute()
+        )
+
+    try:
+        result = await run_in_threadpool(patch)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to update conversation: {exc}") from exc
+
+    if not result.data:
+        raise HTTPException(404, "Conversation not found.")
+
+    return {"id": conv_id, "updated_at": result.data[0].get("updated_at")}
+
+
+@app.get("/api/conversations")
+async def list_conversations(request: Request):
+    user_id = await _require_user(request)
+
+    def fetch():
+        return (
+            _supabase.table("conversations")
+            .select("id, title, mode, created_at, updated_at")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+    try:
+        result = await run_in_threadpool(fetch)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to list conversations: {exc}") from exc
+
+    return result.data
+
+
+@app.get("/api/conversations/{conv_id}")
+async def get_conversation(conv_id: str, request: Request):
+    user_id = await _require_user(request)
+
+    def fetch():
+        return (
+            _supabase.table("conversations")
+            .select("*")
+            .eq("id", conv_id)
+            .eq("user_id", user_id)  # ownership — wrong user surfaces as 404
+            .single()
+            .execute()
+        )
+
+    try:
+        result = await run_in_threadpool(fetch)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to fetch conversation: {exc}") from exc
+
+    if not result.data:
+        raise HTTPException(404, "Conversation not found.")
+
+    return result.data
 
 
 # --------------------------------------------------------------------------
