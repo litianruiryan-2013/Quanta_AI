@@ -337,6 +337,11 @@ class ConversationUpdate(BaseModel):
     messages: Optional[List[ChatMessage]] = None
 
 
+class TitleRequest(BaseModel):
+    user_message: str = Field(..., max_length=1000)
+    assistant_message: str = Field(..., max_length=2000)
+
+
 # --------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------
@@ -1097,6 +1102,61 @@ async def get_conversation(conv_id: str, request: Request):
         raise HTTPException(404, "Conversation not found.")
 
     return result.data
+
+
+@app.delete("/api/conversations/{conv_id}", status_code=204)
+async def delete_conversation(conv_id: str, request: Request):
+    user_id = await _require_user(request)
+
+    def _delete():
+        return (
+            _supabase.table("conversations")
+            .delete()
+            .eq("id", conv_id)
+            .eq("user_id", user_id)  # ownership — wrong user → no-op
+            .execute()
+        )
+
+    try:
+        await run_in_threadpool(_delete)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to delete conversation: {exc}") from exc
+
+
+@app.post("/api/generate-title")
+async def generate_title(req: TitleRequest):
+    """Generate a short 3-6 word title for a conversation exchange."""
+    fallback = req.user_message.strip()[:80]
+
+    if not GROQ_API_KEY:
+        return {"title": fallback}
+
+    prompt = (
+        "Write a 3-6 word title that summarizes this conversation. "
+        "Reply with ONLY the title — no quotes, no punctuation, no explanation.\n\n"
+        f"User: {req.user_message[:600]}\n"
+        f"Assistant: {req.assistant_message[:800]}"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(
+                f"{GROQ_BASE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": "llama-3.1-8b-instant",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 20,
+                    "temperature": 0.4,
+                },
+            )
+        data = response.json()
+        raw = data["choices"][0]["message"]["content"].strip()
+        # Strip stray quotes/punctuation the model sometimes adds
+        title = raw.strip('"\'`').strip(".,!?:;").strip()
+        return {"title": title or fallback}
+    except Exception:
+        return {"title": fallback}
 
 
 # --------------------------------------------------------------------------

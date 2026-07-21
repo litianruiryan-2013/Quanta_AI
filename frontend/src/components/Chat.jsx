@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { BarChart3, Bot, Brain, Network, Paperclip, TrendingUp } from "lucide-react";
 import Message from "./Message.jsx";
 import QuantaLoader from "./QuantaLoader.jsx";
-import { streamChat, sendAgentChat, createReport, createConversation, updateConversation } from "../api.js";
+import { streamChat, sendAgentChat, createReport, createConversation, updateConversation, generateTitle } from "../api.js";
 import { useAuth } from "../AuthContext.jsx";
 
 const DATA_ACCEPT = ".csv,.tsv,.xlsx,.xls";
@@ -152,6 +152,17 @@ export default function Chat({
               const { id } = await createConversation({ title, messages: finalMessages, mode }, token);
               convIdRef.current = id;
               onConversationSaved?.(id);
+
+              // Non-blocking: generate a better title once, then update the sidebar.
+              generateTitle(text, finalContent)
+                .then(({ title: aiTitle }) => {
+                  if (aiTitle) {
+                    updateConversation(id, { title: aiTitle }, token)
+                      .then(() => onConversationSaved?.(id))
+                      .catch(() => {});
+                  }
+                })
+                .catch(() => {});
             } else {
               await updateConversation(convIdRef.current, { messages: finalMessages }, token);
             }

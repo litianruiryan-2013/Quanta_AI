@@ -73,14 +73,18 @@ async function authFetch(path, method, body, token) {
     const payload = await res.json().catch(() => ({}));
     throw new Error(payload.detail || `Request failed (${res.status})`);
   }
+  if (res.status === 204) return null;
   return res.json();
 }
 
-export const listConversations  = (token)       => authFetch("/api/conversations",      "GET",   null, token);
-export const getConversation    = (id, token)   => authFetch(`/api/conversations/${id}`, "GET",  null, token);
-export const createConversation = (data, token) => authFetch("/api/conversations",      "POST",  data, token);
-export const updateConversation = (id, data, token) =>
-  authFetch(`/api/conversations/${id}`, "PATCH", data, token);
+export const listConversations  = (token)           => authFetch("/api/conversations",       "GET",    null, token);
+export const getConversation    = (id, token)       => authFetch(`/api/conversations/${id}`, "GET",    null, token);
+export const createConversation = (data, token)     => authFetch("/api/conversations",       "POST",   data, token);
+export const updateConversation = (id, data, token) => authFetch(`/api/conversations/${id}`, "PATCH",  data, token);
+export const deleteConversation = (id, token)       => authFetch(`/api/conversations/${id}`, "DELETE", null, token);
+
+export const generateTitle = (userMessage, assistantMessage) =>
+  postJSON("/api/generate-title", { user_message: userMessage, assistant_message: assistantMessage });
 
 // ── LLM helpers ─────────────────────────────────────────────────────────────
 
