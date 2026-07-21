@@ -185,6 +185,13 @@ export default function Chat({
   };
 
   const cfg = MODE_CONFIG[mode] ?? MODE_CONFIG.strategy;
+
+  // async because downloadPdf() dynamically imports jsPDF at call-time
+  const handleDownloadPdf = useCallback(async () => {
+    if (!lastAssistantContent) return;
+    const { downloadPdf } = await import("../utils/exportPdf.js");
+    await downloadPdf(lastAssistantContent, cfg.label, shareTitle);
+  }, [lastAssistantContent, cfg.label, shareTitle]);
   const ModeIcon = cfg.icon;
   const msgTransition = shouldReduce ? { duration: 0 } : { duration: 0.3, ease };
   const badgeTransition = shouldReduce ? { duration: 0 } : { duration: 0.18 };
@@ -229,21 +236,29 @@ export default function Chat({
             : "● Ollama offline"}
         </span>
 
-        {/* Share Report button — only when a completed AI reply exists */}
+        {/* Action buttons — only when a completed AI reply exists */}
         {lastAssistantContent && !busy && (
-          <div className="relative ml-auto flex items-center">
-            {/* Glow layer */}
-            <span
-              aria-hidden
-              className="animate-glow-pulse pointer-events-none absolute inset-0 rounded-lg bg-ember-500/40 blur-md"
-            />
+          <div className="ml-auto flex items-center gap-2">
             <button
-              onClick={handleShare}
-              disabled={shareState?.status === "loading"}
-              className="relative rounded-lg bg-ember-600 px-3 py-1 font-mono text-[11px] font-bold text-ink-950 shadow-ember-glow transition-colors hover:bg-ember-500 disabled:opacity-60"
+              onClick={handleDownloadPdf}
+              className="rounded-lg border border-ink-700 px-3 py-1 font-mono text-[11px] font-semibold text-ink-300 transition-colors hover:border-ink-500 hover:text-ink-100"
             >
-              {shareState?.status === "loading" ? "Saving…" : "Share Report"}
+              Download PDF
             </button>
+            <div className="relative flex items-center">
+              {/* Glow layer */}
+              <span
+                aria-hidden
+                className="animate-glow-pulse pointer-events-none absolute inset-0 rounded-lg bg-ember-500/40 blur-md"
+              />
+              <button
+                onClick={handleShare}
+                disabled={shareState?.status === "loading"}
+                className="relative rounded-lg bg-ember-600 px-3 py-1 font-mono text-[11px] font-bold text-ink-950 shadow-ember-glow transition-colors hover:bg-ember-500 disabled:opacity-60"
+              >
+                {shareState?.status === "loading" ? "Saving…" : "Share Report"}
+              </button>
+            </div>
           </div>
         )}
 
