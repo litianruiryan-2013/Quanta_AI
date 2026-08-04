@@ -10,3 +10,4 @@ python-multipart>=0.0.9
 slowapi>=0.1.9
 supabase>=2.0.0
 python-dotenv>=1.0.0
+tavily-python

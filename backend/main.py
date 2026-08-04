@@ -905,7 +905,14 @@ def _sync_get_history(ticker: str, period: str) -> dict:
         "high": _clean_number(float(closes.max())),
         "low": _clean_number(float(closes.min())),
     }
-
+def _sync_web_search(query: str) -> dict:
+    client = TavilyClient(os.environ.get("TAVILY_API_KEY"))
+    resp = client.search(query=query, max_results=5)
+    results = [
+        {"title": r["title"], "content": r["content"], "url": r["url"]}
+        for r in resp.get("results", [])
+    ]
+    return {"query": query, "results": results}
 async def run_tool(name: str, arguments: dict):
     """Dispatch a tool call by name to its implementation."""
     if name == "get_quotes":
@@ -915,7 +922,10 @@ async def run_tool(name: str, arguments: dict):
         return await run_in_threadpool(
             _sync_get_history, arguments.get("ticker", ""), arguments.get("period", "1mo")
         )
+    if name == "web_search":
+            return await run_in_threadpool(_sync_web_search, arguments.get("query", "")) 
     raise ValueError(f"Unknown tool: {name!r}")
+    
 
 
 class AgentChatRequest(BaseModel):
