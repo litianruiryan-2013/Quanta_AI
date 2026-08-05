@@ -6,7 +6,7 @@ const CARDS = [
   {
     Icon: Brain,
     title: "Strategy AI",
-    body: "Chat with your local LLM about any dataset, codebase, or trading thesis. Runs fully offline — your data never leaves your machine.",
+    body: "Chat with a cloud AI agent about any dataset or trading thesis. It can look up live prices, market history, and search the web for context.",
     iconBg: "bg-ember-500/10",
     iconText: "text-ember-500",
     borderHover: "hover:border-ember-500/40",
@@ -15,7 +15,7 @@ const CARDS = [
   {
     Icon: LineChart,
     title: "Market Charts",
-    body: "Live ticker lookup with interactive candlestick and comparison charts. Powered by yFinance, streamed from your local backend.",
+    body: "Live ticker lookup with interactive candlestick and comparison charts, powered by yFinance.",
     iconBg: "bg-sky-400/10",
     iconText: "text-sky-400",
     borderHover: "hover:border-sky-400/40",
@@ -127,7 +127,7 @@ export default function Home({ onLaunch, theme, onToggleTheme }) {
             className="animate-fade-up font-mono text-xs font-semibold tracking-[0.3em] text-ember-500"
             style={{ animationDelay: "80ms" }}
           >
-            LOCAL AI · REAL MARKETS · ZERO RISK
+            CLOUD AI · REAL MARKETS · ZERO RISK
           </p>
 
           {/* Self-drawing stock chart */}
@@ -152,8 +152,8 @@ export default function Home({ onLaunch, theme, onToggleTheme }) {
             className="animate-fade-up max-w-sm text-sm leading-relaxed text-ink-300"
             style={{ animationDelay: "360ms" }}
           >
-            Your offline-first financial intelligence platform. Chat with AI, analyze live
-            markets, and backtest trades — all from your machine.
+            Your cloud-based financial intelligence platform. Chat with a research agent,
+            analyze live markets, and backtest trades.
           </p>
 
           <motion.button
@@ -193,7 +193,7 @@ export default function Home({ onLaunch, theme, onToggleTheme }) {
 
       {/* Footer */}
       <footer className="border-t border-ink-700 py-5 text-center font-mono text-[10px] tracking-widest text-ink-500">
-        © 2025 QUANTA · offline-first · free
+        © 2025 QUANTA · cloud AI
       </footer>
     </div>
   );

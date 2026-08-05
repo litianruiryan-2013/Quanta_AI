@@ -342,7 +342,7 @@ function AppShell() {
   }, [effectiveChartHeight]);
   const chatPanel = (
     <Chat
-      model={model} models={models} onModelChange={setModel}
+      model={model}
       ollamaOk={ollamaOk} provider={provider}
       mode={mode} onModeChange={(m) => navigate(`/app/${MODULE_TO_SLUG[m] ?? "strategy"}`)}
       dataContext={dataContext} onClearDataContext={() => setDataContext(null)}
@@ -487,7 +487,7 @@ function AppShell() {
         </span>
 
         <span className="rounded-full border border-ink-700 px-2 py-0.5 font-mono text-[10px] text-ink-500">
-          offline · free
+          cloud AI
         </span>
 
         <UserWidget />

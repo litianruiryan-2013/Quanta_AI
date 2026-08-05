@@ -74,7 +74,7 @@ const MODE_CONFIG = {
 const ease = [0.16, 1, 0.3, 1];
 
 export default function Chat({
-  model, models, onModelChange, ollamaOk,
+  model, ollamaOk,
   mode, onModeChange, dataContext, onClearDataContext,
   pendingPrompt, onPendingConsumed, messages, setMessages, provider,
   conversationId, onConversationSaved, onFileAttach,
@@ -260,17 +260,6 @@ export default function Chat({
           </motion.span>
         </AnimatePresence>
 
-        {/* Model picker */}
-        <select
-          value={model}
-          onChange={(e) => onModelChange(e.target.value)}
-          className="rounded-lg border border-ink-700 bg-ink-950 px-2 py-1 font-mono text-xs text-ink-100 focus:border-ember-500 focus:outline-none"
-        >
-          {(models.length ? models : [model]).map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
-
         <span className={`font-mono text-[11px] ${ollamaOk ? "text-mint-400" : "text-red-400"}`}>
           {ollamaOk
             ? `● ${provider === "groq" ? "Groq" : provider === "gemini" ? "Gemini" : "Ollama"} connected`
@@ -392,7 +381,7 @@ export default function Chat({
               ))}
             </div>
             <p className="mt-6 font-mono text-[11px] text-ink-700">
-              100% local · 100% free · nothing leaves your machine
+              Cloud-based AI financial analysis · research agent
             </p>
           </div>
         )}
