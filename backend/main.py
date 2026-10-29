@@ -52,9 +52,9 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_FREE_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"]
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_BASE_URL = os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
-GROQ_FREE_MODELS = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+GROQ_FREE_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
 
 
 def resolve_provider() -> str:
@@ -1154,10 +1154,11 @@ async def generate_title(req: TitleRequest):
                 f"{GROQ_BASE_URL}/chat/completions",
                 headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
                 json={
-                    "model": "llama-3.1-8b-instant",
+                    "model": "openai/gpt-oss-20b",
                     "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 20,
+                    "max_tokens": 80,
                     "temperature": 0.4,
+                    "reasoning_effort": "low",
                 },
             )
         data = response.json()
