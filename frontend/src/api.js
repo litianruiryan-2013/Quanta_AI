@@ -83,26 +83,6 @@ export const createConversation = (data, token)     => authFetch("/api/conversat
 export const updateConversation = (id, data, token) => authFetch(`/api/conversations/${id}`, "PATCH",  data, token);
 export const deleteConversation = (id, token)       => authFetch(`/api/conversations/${id}`, "DELETE", null, token);
 
-// ── QUANTA Business: payables + dashboard ───────────────────────────────────
-
-export const listPayables  = (token)           => authFetch("/api/payables",       "GET",    null, token);
-export const createPayable = (data, token)     => authFetch("/api/payables",       "POST",   data, token);
-export const updatePayable = (id, data, token) => authFetch(`/api/payables/${id}`, "PATCH",  data, token);
-export const deletePayable = (id, token)       => authFetch(`/api/payables/${id}`, "DELETE", null, token);
-export const getDashboard  = (token)           => authFetch("/api/dashboard",      "GET",    null, token);
-
-async function getJSON(path) {
-  const res = await fetch(url(path));
-  if (!res.ok) {
-    const payload = await res.json().catch(() => ({}));
-    throw new Error(payload.detail || `Request failed (${res.status})`);
-  }
-  return res.json();
-}
-
-export const getDemoPayables  = () => getJSON("/api/demo/payables");
-export const getDemoDashboard = () => getJSON("/api/demo/dashboard");
-
 export const generateTitle = (userMessage, assistantMessage) =>
   postJSON("/api/generate-title", { user_message: userMessage, assistant_message: assistantMessage });
 

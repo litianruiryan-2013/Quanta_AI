@@ -29,18 +29,6 @@ export default {
         sky: {
           400: v("--sky-400"), // second series in stock comparison
         },
-        // QUANTA Business — "shipping manifest" skin. Fixed literal palette
-        // (not theme-variable driven like `ink`/`ember`): this is a single,
-        // deliberate look, not a dark/light pair.
-        manifest: {
-          bg:     "#F4F1EA",
-          panel:  "#FBFAF6",
-          ink:    "#1B1B18",
-          muted:  "#5E5A51",
-          dash:   "#B9B3A6",
-          rust:   "#C2410C", // costing you more
-          forest: "#2F6B4F", // in your favour
-        },
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],

@@ -1,6 +1,5 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { Activity, Brain, LineChart } from "lucide-react";
-import { Link } from "react-router-dom";
 import { useAuth } from "./AuthContext.jsx";
 
 const CARDS = [
@@ -55,12 +54,6 @@ export default function Home({ onLaunch, theme, onToggleTheme }) {
         </div>
         <span className="font-mono text-sm font-bold tracking-[0.2em] text-ink-100">QUANTA</span>
         <div className="ml-auto flex items-center gap-2">
-          <Link
-            to="/business/dashboard"
-            className="rounded-lg border border-ink-700 px-2.5 py-1 font-mono text-xs font-semibold text-ink-300 transition-colors hover:border-mint-400/60 hover:text-mint-400"
-          >
-            QUANTA Business →
-          </Link>
           {user ? (
             <>
               <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-ember-600 font-mono text-[10px] font-bold text-ink-950">

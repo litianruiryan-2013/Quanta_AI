@@ -4,8 +4,6 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 import Home from "./Home.jsx";
 import SharedReport from "./SharedReport.jsx";
 import AuthCallback from "./AuthCallback.jsx";
-import DashboardPage from "./components/DashboardPage.jsx";
-import PayablesPage from "./components/PayablesPage.jsx";
 import { useAuth } from "./AuthContext.jsx";
 import ConversationList from "./components/ConversationList.jsx";
 import Chat from "./components/Chat.jsx";
@@ -595,9 +593,6 @@ export default function App() {
       />
       <Route path="/app" element={<Navigate to="/app/agent" replace />} />
       <Route path="/app/:module" element={<AppShell />} />
-      <Route path="/business" element={<Navigate to="/business/dashboard" replace />} />
-      <Route path="/business/dashboard" element={<DashboardPage />} />
-      <Route path="/business/payables" element={<PayablesPage />} />
       <Route path="/shared/:id" element={<SharedReport />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="*" element={<Navigate to="/" replace />} />
