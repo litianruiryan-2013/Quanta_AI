@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import Home from "./Home.jsx";
+import HomePage from "./components/HomePage.jsx";
+import AiPage from "./components/AiPage.jsx";
+import BusinessHub from "./components/BusinessHub.jsx";
+import ResearchPage from "./components/ResearchPage.jsx";
+import ComingSoonPage from "./components/ComingSoonPage.jsx";
 import SharedReport from "./SharedReport.jsx";
 import AuthCallback from "./AuthCallback.jsx";
 import { useAuth } from "./AuthContext.jsx";
@@ -16,13 +20,12 @@ import Simulator from "./components/Simulator.jsx";
 import useMediaQuery from "./useMediaQuery.js";
 import { getHealth, analyzeSpreadsheet } from "./api.js";
 
+// Strategy / Supply Chain / FX Treasury / Commodity Arbitrage are retired
+// from navigation (QUANTA Business supersedes them) but their chart/chat
+// code is left in place in case any of it gets reused later.
 const MODULES = [
-  { id: "agent",               emoji: "🤖", label: "Agent" },
-  { id: "strategy",            emoji: "♟",  label: "Strategy" },
-  { id: "supply_chain",        emoji: "🌐", label: "Supply Chain" },
-  { id: "fx_treasury",         emoji: "📈", label: "FX Treasury" },
-  { id: "commodity_arbitrage", emoji: "💎", label: "Commodity Arb" },
-  { id: "simulator",           emoji: "💹", label: "Paper Trading" },
+  { id: "agent",      emoji: "🤖", label: "Agent" },
+  { id: "simulator",  emoji: "💹", label: "Paper Trading" },
 ];
 
 // URL slug ↔ internal module name
@@ -563,34 +566,26 @@ function AppShell() {
 }
 
 export default function App() {
-  // Theme is also needed on the Home route, so read it here for the Home prop.
-  // AppShell manages its own copy with localStorage sync.
-  const [theme, setTheme] = useState(() => {
-    if (typeof window === "undefined") return "dark";
-    const saved = localStorage.getItem("quanta-theme");
-    if (saved === "dark" || saved === "light") return saved;
-    return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  });
-  useEffect(() => {
-    document.documentElement.classList.toggle("light", theme === "light");
-    localStorage.setItem("quanta-theme", theme);
-  }, [theme]);
-  const toggleTheme = useCallback(() => setTheme((t) => (t === "dark" ? "light" : "dark")), []);
-
-  const navigate = useNavigate();
-
   return (
     <Routes>
+      <Route path="/" element={<HomePage />} />
+
+      <Route path="/ai" element={<AiPage />} />
+
+      <Route path="/business" element={<BusinessHub />} />
+      <Route path="/business/research" element={<ResearchPage />} />
+
       <Route
-        path="/"
+        path="/learn"
         element={
-          <Home
-            onLaunch={() => navigate("/app/agent")}
-            theme={theme}
-            onToggleTheme={toggleTheme}
+          <ComingSoonPage
+            eyebrow="QUANTA Learn"
+            title="Learn"
+            body="Markets explained from first principles. Coming soon."
           />
         }
       />
+
       <Route path="/app" element={<Navigate to="/app/agent" replace />} />
       <Route path="/app/:module" element={<AppShell />} />
       <Route path="/shared/:id" element={<SharedReport />} />

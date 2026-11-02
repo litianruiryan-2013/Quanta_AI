@@ -2,47 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ---- Theme palettes (RGB channels, consumed by tailwind.config.js) ---- */
-
-/* Dark is the default. */
+/* ---- Theme palettes (RGB channels, consumed by tailwind.config.js) ----
+   Dark is the default; `.light` overrides for the toggle. Brand accents
+   (ember, up, down) are intentionally theme-invariant — hardcoded in
+   tailwind.config.js rather than themed here. */
 :root {
-  --ink-950: 11 14 20;
-  --ink-900: 17 21 31;
-  --ink-800: 26 32 48;
-  --ink-700: 37 44 64;
-  --ink-500: 74 85 114;
-  --ink-300: 154 165 193;
-  --ink-100: 227 232 244;
+  --ink-950: 14 15 18;   /* app background    (#0E0F12) */
+  --ink-900: 22 24 29;   /* panels             (#16181D) */
+  --ink-800: 30 33 40;   /* raised panels      (#1E2128) */
+  --ink-700: 154 154 163; /* borders: see `line` below for the real translucent border */
+  --ink-500: 154 154 163; /* muted text        (#9A9AA3) */
+  --ink-300: 200 200 206;
+  --ink-100: 242 240 235; /* primary text      (#F2F0EB) */
 
-  --ember-500: 255 138 61;
-  --ember-600: 240 116 31;
-  --mint-400: 94 230 168;
+  --ember-500: 255 138 61; /* hover-lighter */
+  --ember-600: 240 116 31; /* #F0741F — the one brand accent */
+  --mint-400: 34 195 142;  /* kept for legacy /app success-dot usage; == up */
   --sky-400: 91 200 255;
 
-  /* Chart helpers read by MarketDashboard via getThemeColors(). */
-  --chart-grid: 37 44 64;
-  --chart-axis: 74 85 114;
+  --line: 255 255 255; /* used as border-line/8, bg-line/5, etc. */
+
+  --chart-grid: 255 255 255 / 0.06;
+  --chart-axis: 154 154 163;
   color-scheme: dark;
 }
 
-/* Light theme: the ink scale flips so 950 is the lightest surface and
-   100 is the darkest text. Accents are deepened for contrast on white. */
 .light {
-  --ink-950: 247 248 251; /* app background */
+  --ink-950: 244 244 247; /* app background */
   --ink-900: 255 255 255; /* panels */
-  --ink-800: 237 240 246; /* raised surfaces */
-  --ink-700: 220 226 235; /* borders / hovers */
-  --ink-500: 112 122 145;
-  --ink-300: 71 80 102;
-  --ink-100: 20 24 33;     /* primary text */
+  --ink-800: 255 255 255; /* raised panels (distinguished by shadow, not tint) */
+  --ink-700: 107 107 117;
+  --ink-500: 107 107 117; /* muted text */
+  --ink-300: 70 70 80;
+  --ink-100: 21 22 26;    /* primary text */
 
-  --ember-500: 210 88 12;
-  --ember-600: 181 74 8;
-  --mint-400: 14 157 99;
+  --ember-500: 255 138 61;
+  --ember-600: 240 116 31;
+  --mint-400: 34 195 142;
   --sky-400: 14 124 204;
 
-  --chart-grid: 220 226 235;
-  --chart-axis: 112 122 145;
+  --line: 0 0 0;
+
+  --chart-grid: 0 0 0 / 0.08;
+  --chart-axis: 107 107 117;
   color-scheme: light;
 }
 
@@ -65,13 +67,69 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-ink-700 rounded-full;
+  @apply bg-ink-700/30 rounded-full;
 }
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-ink-500;
+  @apply bg-ink-500/50;
 }
 
-/* ---- Homepage signature animations ---- */
+/* ---- Shared shape recipes — "used throughout", not ad-hoc per component ---- */
+@layer components {
+  /* Flat card: panels, chat bubbles, chips containers. */
+  .card {
+    @apply relative rounded-2xl border bg-ink-900;
+    border-color: rgb(var(--line) / 0.08);
+  }
+  /* Elevated card: homepage preview, hero card, modals. Inset top edge
+     reads as a highlight in dark mode, a soft groove in light mode. */
+  .card-raised {
+    @apply relative rounded-2xl border bg-ink-800;
+    border-color: rgb(var(--line) / 0.08);
+    box-shadow:
+      inset 0 1px 0 0 rgb(var(--line) / 0.06),
+      0 12px 32px -12px rgb(0 0 0 / 0.45);
+  }
+
+  .pill {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 font-mono text-xs font-semibold uppercase tracking-wide transition-all duration-200;
+  }
+  .pill-ember {
+    @apply pill bg-ember-600 text-white;
+    box-shadow: 0 4px 16px -4px rgb(240 116 31 / 0.5);
+  }
+  .pill-ember:hover {
+    @apply bg-ember-500;
+    box-shadow: 0 6px 20px -4px rgb(240 116 31 / 0.65);
+  }
+  .pill-outline {
+    @apply pill border text-ink-300;
+    border-color: rgb(var(--line) / 0.14);
+  }
+  .pill-outline:hover {
+    @apply text-ink-100;
+    border-color: rgb(var(--ember-600) / 1);
+  }
+  .pill-chip {
+    @apply pill border px-3 py-1 text-[11px] normal-case text-ink-300;
+    border-color: rgb(var(--line) / 0.12);
+    background: rgb(var(--line) / 0.03);
+  }
+  .pill-chip:hover {
+    @apply text-ink-100;
+    border-color: rgb(var(--ember-600) / 0.6);
+  }
+
+  .focus-glow:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(240 116 31 / 0.35);
+  }
+
+  .glow-ember {
+    box-shadow: 0 0 24px 0 rgb(240 116 31 / 0.35);
+  }
+}
+
+/* ---- Signature animations ---- */
 
 @keyframes drawLine {
   from { stroke-dashoffset: 600; }
@@ -93,6 +151,38 @@ body {
   opacity: 0;
   animation: areaFade 0.8s ease-out 1.2s both;
 }
+
+@keyframes pulselineDraw {
+  from { stroke-dashoffset: var(--pl-len, 1000); }
+  to   { stroke-dashoffset: 0; }
+}
+.pulseline-line {
+  animation: pulselineDraw 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.pulseline-area {
+  opacity: 0;
+  animation: areaFade 0.7s ease-out 0.5s both;
+}
+
+@keyframes fadeRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-rise {
+  animation: fadeRise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Brief tint flash on the element whose price just ticked — see usePriceFlash. */
+@keyframes flashUp {
+  0%   { background-color: rgb(34 195 142 / 0.22); }
+  100% { background-color: rgb(34 195 142 / 0); }
+}
+@keyframes flashDown {
+  0%   { background-color: rgb(242 84 110 / 0.22); }
+  100% { background-color: rgb(242 84 110 / 0); }
+}
+.flash-up   { animation: flashUp 0.9s ease-out; }
+.flash-down { animation: flashDown 0.9s ease-out; }
 
 @media (prefers-reduced-motion: reduce) {
   * {

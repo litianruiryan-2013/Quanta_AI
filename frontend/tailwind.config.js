@@ -29,9 +29,17 @@ export default {
         sky: {
           400: v("--sky-400"), // second series in stock comparison
         },
+        // Translucent border/highlight channel — use as border-line/8,
+        // bg-line/5, etc. White in dark mode, black in light mode.
+        line: v("--line"),
+        // Brand price colors — fixed across themes on purpose; ember is
+        // reserved for brand/accent and is never used for up/down.
+        up:   "#22C38E",
+        down: "#F2546E",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
+        display: ["Space Grotesk", "Inter", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "Menlo", "Consolas", "monospace"],
       },
       keyframes: {

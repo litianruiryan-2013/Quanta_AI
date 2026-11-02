@@ -18,7 +18,7 @@ import json
 import math
 import os
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
@@ -27,6 +27,7 @@ load_dotenv()
 import httpx
 import pandas as pd
 import yfinance as yf
+from tavily import TavilyClient
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
@@ -55,6 +56,8 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_BASE_URL = os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
 GROQ_FREE_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "").strip()
 
 
 def resolve_provider() -> str:
@@ -260,7 +263,9 @@ You possess advanced tools to fetch live market data, order books, and financial
 
 Live Data Triggers: Execute data retrieval tools only when the user's query explicitly or implicitly requires live market data, real-time pricing, updated financial statements, or current order book depth to be answered accurately.
 
-Conversational Baseline: If the user greets you ("hi", "hello"), asks general conceptual questions, requests theoretical explanations, or discusses historical data already within your knowledge base, do not call data tools. Respond conversationally and analytically using your existing knowledge."""
+Conversational Baseline: If the user greets you ("hi", "hello"), asks general conceptual questions, requests theoretical explanations, or discusses historical data already within your knowledge base, do not call data tools. Respond conversationally and analytically using your existing knowledge.
+
+Citations: Whenever you call web_search, you must cite every source you drew from in your final answer — as a Markdown link with the real URL from the search results (e.g. [Reuters](https://...)), inline where the claim is made or in a trailing "Sources" list. Never present web-search findings without their URLs attached. Price/history tool results (get_quotes, get_market_history) are not web sources and don't need citation."""
 
 _SYSTEM_PROMPTS = {
     "code":                  CODE_SYSTEM_PROMPT,
@@ -335,6 +340,11 @@ class ConversationCreate(BaseModel):
 class ConversationUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=500)
     messages: Optional[List[ChatMessage]] = None
+
+
+class WatchlistCreate(BaseModel):
+    ticker: str = Field(..., min_length=1, max_length=20)
+    label: Optional[str] = Field(None, max_length=100)
 
 
 class TitleRequest(BaseModel):
@@ -859,6 +869,24 @@ TOOL_DEFS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": (
+                "Search the web for current news, articles, or context that live price/history "
+                "data can't explain — e.g. why an asset moved, recent headlines, earnings news. "
+                "Every result includes a URL; cite it in the final answer."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query."}
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
 
@@ -906,13 +934,17 @@ def _sync_get_history(ticker: str, period: str) -> dict:
         "low": _clean_number(float(closes.min())),
     }
 def _sync_web_search(query: str) -> dict:
-    client = TavilyClient(os.environ.get("TAVILY_API_KEY"))
+    if not TAVILY_API_KEY:
+        return {"query": query, "results": [], "error": "Web search is not configured (TAVILY_API_KEY unset)."}
+    client = TavilyClient(TAVILY_API_KEY)
     resp = client.search(query=query, max_results=5)
     results = [
         {"title": r["title"], "content": r["content"], "url": r["url"]}
         for r in resp.get("results", [])
     ]
     return {"query": query, "results": results}
+
+
 async def run_tool(name: str, arguments: dict):
     """Dispatch a tool call by name to its implementation."""
     if name == "get_quotes":
@@ -923,7 +955,7 @@ async def run_tool(name: str, arguments: dict):
             _sync_get_history, arguments.get("ticker", ""), arguments.get("period", "1mo")
         )
     if name == "web_search":
-            return await run_in_threadpool(_sync_web_search, arguments.get("query", "")) 
+        return await run_in_threadpool(_sync_web_search, arguments.get("query", ""))
     raise ValueError(f"Unknown tool: {name!r}")
     
 
@@ -943,30 +975,26 @@ async def agent_chat(request: Request, req: AgentChatRequest):
     messages.insert(0, {"role": "system", "content": AGENT_SYSTEM_PROMPT})
     model = req.model if req.model in (GROQ_FREE_MODELS + [GROQ_MODEL]) else GROQ_MODEL
 
-    # TODO: agent loop
-    for iteration in range(5):
+    # Agent loop: call Groq, run any requested tools, feed results back, repeat
+    # until it stops calling tools (or we hit the iteration cap).
+    for _ in range(8):
         url = f"{GROQ_BASE_URL}/chat/completions"
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         body = {"model": model, "messages": messages, "tools": TOOL_DEFS, "tool_choice": "auto"}
-        print("MSG COUNT:", len(messages), [m["role"] for m in messages])
         try:
             async with httpx.AsyncClient(timeout=60) as client:
                 response = await client.post(url, headers=headers, json=body)
             data = response.json()
-            if "error" in data:
-                raise HTTPException(502, f"Groq: {data['error'].get('message')}")
-            
-            print(data)
-            choice = data["choices"][0]
-            finish = choice["finish_reason"]
-            msg = choice["message"]
-            
         except httpx.ConnectError:
             raise HTTPException(502, "Could not reach the Groq API.")
-        
+
         if "error" in data:
-                raise HTTPException(502, f"Groq: {data['error'].get('message')}")
-        
+            raise HTTPException(502, f"Groq: {data['error'].get('message')}")
+
+        choice = data["choices"][0]
+        finish = choice["finish_reason"]
+        msg = choice["message"]
+
         if finish == "stop":
             return {"content": msg["content"]}
         messages.append(msg)
@@ -975,20 +1003,12 @@ async def agent_chat(request: Request, req: AgentChatRequest):
             name = call["function"]["name"]
             args = json.loads(call["function"]["arguments"])
             result = await run_tool(name, args)
-            print("TOOL RESULT:", result)
             messages.append({
                 "role": "tool",
                 "tool_call_id": call["id"],
                 "content": json.dumps(result),
             })
     return {"content": "Hit the iteration limit."}
-
-
-    # 1. POST to GROQ_BASE_URL/chat/completions with messages, TOOL_DEFS, tool_choice="auto"
-    # 2. If finish_reason == "tool_calls": parse tool_calls, run run_tool() for each,
-    #    append assistant message (with tool_calls) + tool result messages, loop back to 1.
-    # 3. If finish_reason == "stop": return choices[0].message.content to the client.
-    # 4. Guard against infinite loops with a max-iterations cap (e.g. 10).
 
 
 
@@ -1133,6 +1153,73 @@ async def delete_conversation(conv_id: str, request: Request):
         raise HTTPException(502, f"Failed to delete conversation: {exc}") from exc
 
 
+# --------------------------------------------------------------------------
+# Watchlist (Supabase)
+#
+# Expected table schema: see sql/watchlist.sql (RLS on, no policies — only
+# the backend's service-role key can touch this table, same as `conversations`).
+# --------------------------------------------------------------------------
+
+@app.post("/api/watchlist", status_code=201)
+async def create_watchlist_item(request: Request, req: WatchlistCreate):
+    user_id = await _require_user(request)
+    ticker = req.ticker.strip().upper()
+
+    def insert():
+        return (
+            _supabase.table("watchlist")
+            .insert({"user_id": user_id, "ticker": ticker, "label": req.label})
+            .execute()
+        )
+
+    try:
+        result = await run_in_threadpool(insert)
+    except Exception as exc:
+        if "duplicate" in str(exc).lower():
+            raise HTTPException(409, f"{ticker} is already on your watchlist.") from exc
+        raise HTTPException(502, f"Failed to add to watchlist: {exc}") from exc
+    return result.data[0]
+
+
+@app.get("/api/watchlist")
+async def list_watchlist(request: Request):
+    user_id = await _require_user(request)
+
+    def fetch():
+        return (
+            _supabase.table("watchlist")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at")
+            .execute()
+        )
+
+    try:
+        result = await run_in_threadpool(fetch)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to list watchlist: {exc}") from exc
+    return result.data
+
+
+@app.delete("/api/watchlist/{item_id}", status_code=204)
+async def delete_watchlist_item(item_id: str, request: Request):
+    user_id = await _require_user(request)
+
+    def _delete():
+        return (
+            _supabase.table("watchlist")
+            .delete()
+            .eq("id", item_id)
+            .eq("user_id", user_id)  # ownership — wrong user → no-op
+            .execute()
+        )
+
+    try:
+        await run_in_threadpool(_delete)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to remove watchlist item: {exc}") from exc
+
+
 @app.post("/api/generate-title")
 async def generate_title(req: TitleRequest):
     """Generate a short 3-6 word title for a conversation exchange."""
@@ -1228,6 +1315,81 @@ async def get_report(report_id: str):
     if not result.data:
         raise HTTPException(404, "Report not found.")
     return result.data
+
+
+# --------------------------------------------------------------------------
+# QUANTA Business — company research (yfinance + Tavily, cached 10 min)
+# --------------------------------------------------------------------------
+
+_company_cache: Dict[str, dict] = {}
+COMPANY_CACHE_TTL = timedelta(minutes=10)
+
+
+def _sync_get_company(ticker: str) -> dict:
+    t = yf.Ticker(ticker)
+    try:
+        info = t.info or {}
+    except Exception:
+        info = {}
+
+    hist = t.history(period="6mo", interval="1d", auto_adjust=True)
+    points = []
+    if hist is not None and not hist.empty:
+        hist = hist.reset_index()
+        date_col = "Date" if "Date" in hist.columns else "Datetime"
+        for _, row in hist.iterrows():
+            close = _clean_number(row.get("Close"))
+            if close is not None:
+                points.append({"date": row[date_col].strftime("%Y-%m-%d"), "close": close})
+
+    news = []
+    if TAVILY_API_KEY:
+        try:
+            query = f"{info.get('longName') or ticker} stock news"
+            client = TavilyClient(TAVILY_API_KEY)
+            resp = client.search(query=query, max_results=5, topic="news", days=14)
+            news = [
+                {"title": r["title"], "url": r["url"], "content": (r.get("content") or "")[:280]}
+                for r in resp.get("results", [])
+            ]
+        except Exception:
+            news = []
+
+    return {
+        "ticker": ticker,
+        "name": info.get("longName") or info.get("shortName") or ticker,
+        "sector": info.get("sector"),
+        "currency": info.get("currency"),
+        "price": _clean_number(info.get("currentPrice")) or (points[-1]["close"] if points else None),
+        "market_cap": _clean_number(info.get("marketCap")),
+        "pe_ratio": _clean_number(info.get("trailingPE")),
+        "fifty_two_week_low": _clean_number(info.get("fiftyTwoWeekLow")),
+        "fifty_two_week_high": _clean_number(info.get("fiftyTwoWeekHigh")),
+        "revenue": _clean_number(info.get("totalRevenue")),
+        "history": points,
+        "news": news,
+    }
+
+
+@app.get("/api/company/{ticker}")
+@ratelimit("30/minute")
+async def get_company(request: Request, ticker: str):
+    ticker = ticker.strip().upper()
+    if not ticker:
+        raise HTTPException(400, "Ticker required.")
+
+    now = datetime.now(timezone.utc)
+    cached = _company_cache.get(ticker)
+    if cached and (now - cached["cached_at"]) < COMPANY_CACHE_TTL:
+        return cached["data"]
+
+    try:
+        data = await run_in_threadpool(_sync_get_company, ticker)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to fetch company data for {ticker}: {exc}") from exc
+
+    _company_cache[ticker] = {"cached_at": now, "data": data}
+    return data
 
 
 if __name__ == "__main__":

@@ -32,6 +32,26 @@ export const fetchMarketData = (ticker, period = "6mo", interval = "1d") =>
 /** Live-ish batch quotes for a portfolio. */
 export const fetchQuotes = (tickers) => postJSON("/api/quotes", { tickers });
 
+/** Company research: stats, 6mo history, and news (server caches 10 min). */
+export async function fetchCompany(ticker) {
+  const res = await fetch(url(`/api/company/${encodeURIComponent(ticker)}`));
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    throw new Error(payload.detail || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+/** Close-price series for a PulseLine sparkline. Resolves to [] on failure. */
+export async function fetchSparkline(ticker, period = "1mo") {
+  try {
+    const data = await fetchMarketData(ticker, period, "1d");
+    return (data.points || []).map((p) => p.close).filter((c) => c != null);
+  } catch {
+    return [];
+  }
+}
+
 /** Upload a spreadsheet File for pandas profiling + preview. */
 export async function analyzeSpreadsheet(file, name) {
   const form = new FormData();
@@ -85,6 +105,12 @@ export const deleteConversation = (id, token)       => authFetch(`/api/conversat
 
 export const generateTitle = (userMessage, assistantMessage) =>
   postJSON("/api/generate-title", { user_message: userMessage, assistant_message: assistantMessage });
+
+// ── Watchlist ────────────────────────────────────────────────────────────────
+
+export const listWatchlist  = (token)       => authFetch("/api/watchlist", "GET", null, token);
+export const addToWatchlist = (data, token) => authFetch("/api/watchlist", "POST", data, token);
+export const removeFromWatchlist = (id, token) => authFetch(`/api/watchlist/${id}`, "DELETE", null, token);
 
 // ── LLM helpers ─────────────────────────────────────────────────────────────
 
