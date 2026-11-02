@@ -112,6 +112,13 @@ export const listWatchlist  = (token)       => authFetch("/api/watchlist", "GET"
 export const addToWatchlist = (data, token) => authFetch("/api/watchlist", "POST", data, token);
 export const removeFromWatchlist = (id, token) => authFetch(`/api/watchlist/${id}`, "DELETE", null, token);
 
+// ── Portfolio holdings ──────────────────────────────────────────────────────
+
+export const listHoldings  = (token)           => authFetch("/api/portfolio",       "GET",    null, token);
+export const addHolding    = (data, token)     => authFetch("/api/portfolio",       "POST",   data, token);
+export const updateHolding = (id, data, token) => authFetch(`/api/portfolio/${id}`, "PATCH",  data, token);
+export const removeHolding = (id, token)       => authFetch(`/api/portfolio/${id}`, "DELETE", null, token);
+
 // ── LLM helpers ─────────────────────────────────────────────────────────────
 
 /** Send a single-turn agent chat request (non-streaming). Returns { content }. */

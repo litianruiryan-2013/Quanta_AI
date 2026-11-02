@@ -5,8 +5,8 @@ import { Label } from "./ManifestUI.jsx";
 
 const SECTIONS = [
   { to: "/business/research", Icon: Search,    title: "Research",  body: "Look up a company or ticker.",      soon: false },
-  { to: null,                 Icon: Briefcase,  title: "Portfolio", body: "Track holdings and performance.",   soon: true },
-  { to: null,                 Icon: Coins,      title: "Currency",  body: "FX exposure and conversion tools.", soon: true },
+  { to: "/business/portfolio", Icon: Briefcase, title: "Portfolio", body: "Track holdings and performance.",   soon: false },
+  { to: "/business/currency", Icon: Coins,      title: "Currency",  body: "FX exposure and conversion tools.", soon: false },
 ];
 
 export default function BusinessHub() {

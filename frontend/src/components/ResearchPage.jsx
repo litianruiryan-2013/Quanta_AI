@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search, Sparkles, ExternalLink } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -6,7 +6,18 @@ import {
 import TopNav from "./TopNav.jsx";
 import AiMessage from "./AiMessage.jsx";
 import { Label, fmtPrice, fmtCompact } from "./ManifestUI.jsx";
-import { fetchCompany, sendAgentChat } from "../api.js";
+import { fetchCompany, fetchMarketData, sendAgentChat } from "../api.js";
+
+const PERIODS = [
+  { value: "5d",  label: "5D" },
+  { value: "1mo", label: "1M" },
+  { value: "3mo", label: "3M" },
+  { value: "6mo", label: "6M" },
+  { value: "ytd", label: "YTD" },
+  { value: "1y",  label: "1Y" },
+  { value: "5y",  label: "5Y" },
+  { value: "max", label: "MAX" },
+];
 
 function getChartColors() {
   if (typeof window === "undefined") return { grid: "rgba(255,255,255,0.06)", axis: "#9A9AA3" };
@@ -24,6 +35,67 @@ function ChartTooltip({ active, payload, label }) {
     <div className="card px-3 py-2 font-mono text-[11px]">
       <div className="text-ink-500">{label}</div>
       <div className="font-semibold text-ember-500">{fmtPrice(payload[0].value)}</div>
+    </div>
+  );
+}
+
+/** Price chart with its own period selector — decoupled from the 10-min
+ * company-stats cache so switching periods never re-fetches stats/news. */
+function PriceChart({ ticker }) {
+  const [period, setPeriod] = useState("6mo");
+  const [points, setPoints] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const { grid, axis } = getChartColors();
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    fetchMarketData(ticker, period, "1d")
+      .then((d) => { if (active) setPoints(d.points || []); })
+      .catch(() => { if (active) setPoints([]); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [ticker, period]);
+
+  return (
+    <div className="card-raised p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label>Price history</Label>
+        <div className="flex gap-1 rounded-full border border-line/8 bg-ink-950/40 p-1">
+          {PERIODS.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => setPeriod(p.value)}
+              className={`rounded-full px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide transition-colors ${
+                period === p.value ? "bg-ember-600 text-white" : "text-ink-500 hover:text-ink-100"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 h-64">
+        {loading ? (
+          <div className="flex h-full items-center justify-center font-mono text-xs text-ink-500">Loading…</div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={points}>
+              <defs>
+                <linearGradient id="researchEmber" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#F0741F" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#F0741F" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke={grid} vertical={false} />
+              <XAxis dataKey="date" tick={{ fill: axis, fontSize: 10, fontFamily: "JetBrains Mono" }} tickLine={false} axisLine={false} minTickGap={40} />
+              <YAxis tick={{ fill: axis, fontSize: 10, fontFamily: "JetBrains Mono" }} tickLine={false} axisLine={false} domain={["auto", "auto"]} width={56} />
+              <Tooltip content={<ChartTooltip />} />
+              <Area type="monotone" dataKey="close" stroke="#F0741F" strokeWidth={2} fill="url(#researchEmber)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
     </div>
   );
 }
@@ -85,8 +157,6 @@ export default function ResearchPage() {
     }
   };
 
-  const { grid, axis } = getChartColors();
-
   return (
     <div className="flex min-h-full flex-col bg-ink-950 text-ink-100">
       <TopNav />
@@ -128,26 +198,7 @@ export default function ResearchPage() {
               </div>
             </div>
 
-            <div className="card-raised p-5">
-              <Label>6-month price history</Label>
-              <div className="mt-3 h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={data.history}>
-                    <defs>
-                      <linearGradient id="researchEmber" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#F0741F" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="#F0741F" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke={grid} vertical={false} />
-                    <XAxis dataKey="date" tick={{ fill: axis, fontSize: 10, fontFamily: "JetBrains Mono" }} tickLine={false} axisLine={false} minTickGap={40} />
-                    <YAxis tick={{ fill: axis, fontSize: 10, fontFamily: "JetBrains Mono" }} tickLine={false} axisLine={false} domain={["auto", "auto"]} width={56} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Area type="monotone" dataKey="close" stroke="#F0741F" strokeWidth={2} fill="url(#researchEmber)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            <PriceChart ticker={data.ticker} />
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <StatTile label="Market Cap" value={fmtCompact(data.market_cap)} />

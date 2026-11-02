@@ -73,7 +73,7 @@ DATA_EXTENSIONS = {".csv", ".tsv", ".xlsx", ".xls"}
 MAX_FILE_CHARS = 200_000           # per attached code file
 MAX_DATA_FILE_BYTES = 25_000_000   # spreadsheet upload cap
 PREVIEW_ROWS = 100
-VALID_PERIODS = {"5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "max"}
+VALID_PERIODS = {"5d", "1mo", "3mo", "6mo", "ytd", "1y", "2y", "5y", "max"}
 VALID_INTERVALS = {"1h", "1d", "1wk", "1mo"}
 
 app = FastAPI(title="QUANTA — Local Code & Strategy Studio", version="3.0.0")
@@ -345,6 +345,17 @@ class ConversationUpdate(BaseModel):
 class WatchlistCreate(BaseModel):
     ticker: str = Field(..., min_length=1, max_length=20)
     label: Optional[str] = Field(None, max_length=100)
+
+
+class HoldingCreate(BaseModel):
+    ticker: str = Field(..., min_length=1, max_length=20)
+    quantity: float = Field(..., gt=0)
+    cost_basis: float = Field(..., gt=0)  # price per unit paid, in the ticker's own currency
+
+
+class HoldingUpdate(BaseModel):
+    quantity: Optional[float] = Field(None, gt=0)
+    cost_basis: Optional[float] = Field(None, gt=0)
 
 
 class TitleRequest(BaseModel):
@@ -1220,6 +1231,108 @@ async def delete_watchlist_item(item_id: str, request: Request):
         raise HTTPException(502, f"Failed to remove watchlist item: {exc}") from exc
 
 
+# --------------------------------------------------------------------------
+# Portfolio holdings (Supabase)
+#
+# Expected table schema: see sql/portfolio_holdings.sql (RLS on, no
+# policies — only the backend's service-role key can touch this table,
+# same as `conversations`/`watchlist`). Current value and P&L are computed
+# client-side from live quotes, not stored.
+# --------------------------------------------------------------------------
+
+@app.post("/api/portfolio", status_code=201)
+async def create_holding(request: Request, req: HoldingCreate):
+    user_id = await _require_user(request)
+
+    def insert():
+        return (
+            _supabase.table("portfolio_holdings")
+            .insert({
+                "user_id": user_id,
+                "ticker": req.ticker.strip().upper(),
+                "quantity": req.quantity,
+                "cost_basis": req.cost_basis,
+            })
+            .execute()
+        )
+
+    try:
+        result = await run_in_threadpool(insert)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to add holding: {exc}") from exc
+    return result.data[0]
+
+
+@app.get("/api/portfolio")
+async def list_holdings(request: Request):
+    user_id = await _require_user(request)
+
+    def fetch():
+        return (
+            _supabase.table("portfolio_holdings")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at")
+            .execute()
+        )
+
+    try:
+        result = await run_in_threadpool(fetch)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to list holdings: {exc}") from exc
+    return result.data
+
+
+@app.patch("/api/portfolio/{holding_id}")
+async def update_holding(holding_id: str, request: Request, req: HoldingUpdate):
+    user_id = await _require_user(request)
+
+    updates: dict = {}
+    if req.quantity is not None:
+        updates["quantity"] = req.quantity
+    if req.cost_basis is not None:
+        updates["cost_basis"] = req.cost_basis
+    if not updates:
+        raise HTTPException(400, "Request body must include quantity or cost_basis.")
+
+    def patch():
+        return (
+            _supabase.table("portfolio_holdings")
+            .update(updates)
+            .eq("id", holding_id)
+            .eq("user_id", user_id)  # ownership check — wrong user → empty result
+            .execute()
+        )
+
+    try:
+        result = await run_in_threadpool(patch)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to update holding: {exc}") from exc
+
+    if not result.data:
+        raise HTTPException(404, "Holding not found.")
+    return result.data[0]
+
+
+@app.delete("/api/portfolio/{holding_id}", status_code=204)
+async def delete_holding(holding_id: str, request: Request):
+    user_id = await _require_user(request)
+
+    def _delete():
+        return (
+            _supabase.table("portfolio_holdings")
+            .delete()
+            .eq("id", holding_id)
+            .eq("user_id", user_id)  # ownership — wrong user → no-op
+            .execute()
+        )
+
+    try:
+        await run_in_threadpool(_delete)
+    except Exception as exc:
+        raise HTTPException(502, f"Failed to remove holding: {exc}") from exc
+
+
 @app.post("/api/generate-title")
 async def generate_title(req: TitleRequest):
     """Generate a short 3-6 word title for a conversation exchange."""
@@ -1332,15 +1445,15 @@ def _sync_get_company(ticker: str) -> dict:
     except Exception:
         info = {}
 
-    hist = t.history(period="6mo", interval="1d", auto_adjust=True)
-    points = []
+    # Short history only — just enough for a last-price fallback. The chart
+    # on the frontend fetches its own history per selected period via
+    # /api/market-data, independent of this (10-min cached) response.
+    hist = t.history(period="5d", interval="1d", auto_adjust=True)
+    last_close = None
     if hist is not None and not hist.empty:
-        hist = hist.reset_index()
-        date_col = "Date" if "Date" in hist.columns else "Datetime"
-        for _, row in hist.iterrows():
-            close = _clean_number(row.get("Close"))
-            if close is not None:
-                points.append({"date": row[date_col].strftime("%Y-%m-%d"), "close": close})
+        closes = hist["Close"].dropna()
+        if not closes.empty:
+            last_close = _clean_number(float(closes.iloc[-1]))
 
     news = []
     if TAVILY_API_KEY:
@@ -1360,13 +1473,12 @@ def _sync_get_company(ticker: str) -> dict:
         "name": info.get("longName") or info.get("shortName") or ticker,
         "sector": info.get("sector"),
         "currency": info.get("currency"),
-        "price": _clean_number(info.get("currentPrice")) or (points[-1]["close"] if points else None),
+        "price": _clean_number(info.get("currentPrice")) or last_close,
         "market_cap": _clean_number(info.get("marketCap")),
         "pe_ratio": _clean_number(info.get("trailingPE")),
         "fifty_two_week_low": _clean_number(info.get("fiftyTwoWeekLow")),
         "fifty_two_week_high": _clean_number(info.get("fiftyTwoWeekHigh")),
         "revenue": _clean_number(info.get("totalRevenue")),
-        "history": points,
         "news": news,
     }
 

@@ -5,6 +5,8 @@ import HomePage from "./components/HomePage.jsx";
 import AiPage from "./components/AiPage.jsx";
 import BusinessHub from "./components/BusinessHub.jsx";
 import ResearchPage from "./components/ResearchPage.jsx";
+import CurrencyPage from "./components/CurrencyPage.jsx";
+import PortfolioPage from "./components/PortfolioPage.jsx";
 import ComingSoonPage from "./components/ComingSoonPage.jsx";
 import SharedReport from "./SharedReport.jsx";
 import AuthCallback from "./AuthCallback.jsx";
@@ -574,6 +576,8 @@ export default function App() {
 
       <Route path="/business" element={<BusinessHub />} />
       <Route path="/business/research" element={<ResearchPage />} />
+      <Route path="/business/currency" element={<CurrencyPage />} />
+      <Route path="/business/portfolio" element={<PortfolioPage />} />
 
       <Route
         path="/learn"
