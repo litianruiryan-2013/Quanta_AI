@@ -7,7 +7,8 @@ import BusinessHub from "./components/BusinessHub.jsx";
 import ResearchPage from "./components/ResearchPage.jsx";
 import CurrencyPage from "./components/CurrencyPage.jsx";
 import PortfolioPage from "./components/PortfolioPage.jsx";
-import ComingSoonPage from "./components/ComingSoonPage.jsx";
+import LearnHub from "./components/LearnHub.jsx";
+import LessonPage from "./components/LessonPage.jsx";
 import SharedReport from "./SharedReport.jsx";
 import AuthCallback from "./AuthCallback.jsx";
 import { useAuth } from "./AuthContext.jsx";
@@ -579,16 +580,8 @@ export default function App() {
       <Route path="/business/currency" element={<CurrencyPage />} />
       <Route path="/business/portfolio" element={<PortfolioPage />} />
 
-      <Route
-        path="/learn"
-        element={
-          <ComingSoonPage
-            eyebrow="QUANTA Learn"
-            title="Learn"
-            body="Markets explained from first principles. Coming soon."
-          />
-        }
-      />
+      <Route path="/learn" element={<LearnHub />} />
+      <Route path="/learn/:slug" element={<LessonPage />} />
 
       <Route path="/app" element={<Navigate to="/app/agent" replace />} />
       <Route path="/app/:module" element={<AppShell />} />

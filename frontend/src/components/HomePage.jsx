@@ -89,9 +89,16 @@ function BusinessCardPreview({ quote }) {
 
 function LearnCardPreview() {
   return (
-    <div className="mt-3">
-      <div className="font-mono text-lg font-bold text-ink-100">S$12,480<span className="text-up text-xs"> +2.1%</span></div>
-      <PulseLine data={[100, 104, 102, 108, 112, 118]} variant="up" width={200} height={32} glow={false} />
+    <div className="mt-3 space-y-1.5">
+      <div className="flex items-center gap-2 font-sans text-[11px] text-ink-300">
+        <span className="h-1.5 w-1.5 rounded-full bg-up" /> What Is a Stock?
+      </div>
+      <div className="flex items-center gap-2 font-sans text-[11px] text-ink-500">
+        <span className="h-1.5 w-1.5 rounded-full bg-line/20" /> Reading a Price Chart
+      </div>
+      <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-line/8">
+        <div className="h-full w-1/4 rounded-full bg-ember-600" />
+      </div>
     </div>
   );
 }
@@ -119,7 +126,7 @@ function MoverCard({ ticker, quote, spark }) {
 const CARDS = [
   { to: "/ai",       Icon: Bot,            title: "QUANTA AI",       body: "A research agent with live prices, market history, and the web.",      preview: "ai" },
   { to: "/business", Icon: Briefcase,      title: "QUANTA Business", body: "Company and ticker research — chart, stats, news, AI brief.",          preview: "business" },
-  { to: "/learn",    Icon: GraduationCap,  title: "QUANTA Learn",    body: "Markets explained from first principles.", soon: true,                  preview: "learn" },
+  { to: "/learn",    Icon: GraduationCap,  title: "QUANTA Learn",    body: "Short, plain-language lessons on how markets work.",                     preview: "learn" },
 ];
 
 export default function HomePage() {
